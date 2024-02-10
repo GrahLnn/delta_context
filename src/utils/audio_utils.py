@@ -49,10 +49,11 @@ def calculate_energy(audio):
 
 
 def vad_clean(audio_name, output_path, name):
-    voicefixer = VoiceFixer()
+    # voicefixer = VoiceFixer()
     enhance_folder = f"{output_path}/enhance_speaker"
     folder = f"{output_path}/clean_speaker"
-    fixer_audio = f"{folder}/clean_fixer.wav"
+    # fixer_audio = f"{folder}/clean_fixer.wav"
+    fixer_audio = f"{enhance_folder}/{name}.wav"
     if not os.path.exists(folder):
         os.makedirs(folder)
     if not os.path.exists(enhance_folder):
@@ -65,9 +66,9 @@ def vad_clean(audio_name, output_path, name):
     # subprocess.run(command, capture_output=True, text=True)
 
     # print("voicefixer start")
-    voicefixer.restore(
-        input=f"{enhance_folder}/{name}.wav", output=fixer_audio, cuda=True, mode=0
-    )
+    # voicefixer.restore(
+    #     input=f"{enhance_folder}/{name}.wav", output=fixer_audio, cuda=True, mode=0
+    # )
 
     # 加载预训练的模型
     print("speaker diarization start")
@@ -84,7 +85,7 @@ def vad_clean(audio_name, output_path, name):
     print("speaker diarization finish")
     # 读取原始音频文件
     audio, sr = librosa.load(fixer_audio, sr=None)
-    os.remove(f"{folder}/clean_fixer.wav")
+    # os.remove(f"{folder}/clean_fixer.wav")
 
     # 创建一个字典来存储每个说话人的音频段
     speakers_audio = {}

@@ -135,6 +135,15 @@ def transcribe_with_distil_whisper(audio_file, timestamps=False):
                 word["start"] = str(round(float(word["start"]), 2))
                 word["end"] = str(round(float(word["end"]), 2))
 
+            new_words = []
+            for word in chunk["words"]:
+                if word["word"].startswith(" "):
+                    new_words.append(word)
+                else:
+                    new_words[-1]["word"] += word["word"]
+                    new_words[-1]["end"] = word["end"]
+            new_result["chunks"][idx]["words"] = new_words
+
         # for idx, chunk in enumerate(result["chunks"]):
         #     result["chunks"][idx]["timestamp"] = list(chunk["timestamp"])
 

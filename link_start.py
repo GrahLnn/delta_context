@@ -38,7 +38,7 @@ from src.utils.file_utils import sorted_alphanumeric, delete_contents_of_directo
 # from src.utils.bilibili_utils import get_credential
 from src.utils.audio_utils import calculate_energy
 import datetime
-
+from redlines import Redlines
 
 # from bilibili_api import settings
 
@@ -67,9 +67,9 @@ video_datas = (
 )
 
 # sys.exit()
-thread = threading.Thread(target=manage_video_urls)
-thread.daemon = True  # 将线程设置为守护线程，这样当主程序退出时，线程也会退出
-thread.start()
+# thread = threading.Thread(target=manage_video_urls)
+# thread.daemon = True  # 将线程设置为守护线程，这样当主程序退出时，线程也会退出
+# thread.start()
 
 video_datas = video_datas[:limit] if limit else video_datas
 # sys.exit()
@@ -134,6 +134,9 @@ for item in video_datas:
     #     else {"text": ""}
     # )
     result = get_transcribe(afile, cpath, add_timestamps=True)
+    words = []
+    for chunk in result["chunks"]:
+        words.extend(chunk["words"])
 
     # sys.exit()
     if len(result["text"].split()) < 50:
@@ -191,7 +194,21 @@ for item in video_datas:
             shutil.copy(f"{fpath}/{fname}.mp4", f"{clip_path}/video")
             big_chunks = [chunk_texts(result["text"])]
             save_cache({"big_chunks": big_chunks}, f"{cpath}/big_chunks.toml")
+
+            words = []
+            for chunk in result["chunks"]:
+                words.extend(chunk["words"])
+            print(
+                "len for transcript",
+                len(result["text"].split()),
+                len([word["word"] for word in words]),
+            )
+            # test = Redlines(result["text"], "".join([word["word"] for word in words]))
+
+            # with open(f"{cpath}/redlines.md", "w", encoding="utf-8") as f:
+            #     f.write(test.output_markdown)
             # sys.exit()
+
         else:
             if os.path.exists("cache/ignore_videos.toml"):
                 ignore_videos = load_cache("cache/ignore_videos.toml")["ignore_videos"]
@@ -227,21 +244,27 @@ for item in video_datas:
             if not os.path.exists(clip_cpath):
                 os.mkdir(clip_cpath)
             try:
-                seg_transcripts, seg_translates = align_due_sentences(
-                    chunk, clip_cpath
+                seg_transcripts, seg_translates, words = align_due_sentences(
+                    chunk, clip_cpath, words
                 )  # 通过之前摘取的result，来提取seg部分
             except Exception:
                 save_cache({"un_complete_video": item}, "cache/un_complete_video.toml")
                 raise Exception("Un complete video")
 
-            result = align_transcripts(
-                seg_transcripts, audio, clip_cpath
-            )  # 然后对每一个align结果并加上cut时间
+            # result = align_transcripts(
+            #     seg_transcripts, audio, clip_cpath
+            # )  # 然后对每一个align结果并加上cut时间
+            for iidx, word in enumerate(words):
+                words[iidx]["word"] = word["word"].strip()
+                words[iidx]["start"] = float(word["start"])
+                words[iidx]["end"] = float(word["end"])
+
+            result = {"word_segments": words}
             print("aspect_ratio:", aspect_ratio)
             result = rebuild_result_sentences(
                 result, seg_transcripts, seg_translates
             )  # TODO 验证句子是否横跨check result里的项
-            print(result["segments"][0])
+            # print(result["segments"][0])
             if aspect_ratio < 1.5:
 
                 for idx, seg in enumerate(result["segments"]):

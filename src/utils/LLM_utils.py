@@ -406,7 +406,7 @@ def predict_no_ui_long_connection(
         raise ConnectionAbortedError(
             "正常结束，但显示Token不足，导致输出不完整，请削减单次输入的文本量。"
         )
-    print()
+    # print()
     enc = tiktoken.encoding_for_model(model)
     count_input_token = len(enc.encode(inputs + " " + sys_prompt))
     count_output_token = len(enc.encode(result))

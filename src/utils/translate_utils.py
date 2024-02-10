@@ -88,7 +88,7 @@ you：
     #     }}]
     # """
     response = get_completion(prompt, json_output=True)
-    print(response)
+    # print(response)
     parsed_json = json.loads(response)
 
     # 检查翻译中是否包含所有所需的关键字
