@@ -1,11 +1,16 @@
 import time, os, sys, json, tiktoken, threading, functools, traceback, requests
 from .net_utils import checker
-from openai import OpenAI
+
+# from openai import OpenAI
 from src.env.env import OPENAI_API_KEY
 
 # from dotenv import load_dotenv
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from concurrent.futures import ThreadPoolExecutor
+# from transformers import AutoModelForCausalLM, AutoTokenizer
+# from concurrent.futures import ThreadPoolExecutor
+
+
+import httpx
+from dataclasses import asdict
 
 
 def timeout(seconds):
@@ -656,7 +661,7 @@ def gpt2pair(tc, tl, model="gpt-3.5-turbo-16k"):
     # display(Markdown(w))
     try:
         json.loads(w)
-    except:
+    except Exception:
         message = f"返回仅用字典的语法符号修复json字典的语法错误后的完整字典，不得对键或值进行任何修改: \n{w}"
         w = get_completion(message)
         # display(Markdown("修复: "+w))
@@ -671,3 +676,78 @@ def gpt2pair(tc, tl, model="gpt-3.5-turbo-16k"):
     w = dict(zip(keys, values))
     w = json.dumps(w)
     return w
+
+
+class Model:
+    GPT_3_5_TURBO = "gpt-3.5-turbo-0125"
+
+
+class Message:
+    role: str = ""  # required.
+    content: str = ""  # required.
+
+
+APPLICATION_JSON = "application/json"
+
+# https://www.whatismybrowser.com/guides/the-latest-user-agent/chrome
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36"
+_CHAT_API_URL = "https://api.openai.com/v1/chat/completions"
+
+
+async def chat(
+    messages: list[Message],
+    model: Model = Model.GPT_3_5_TURBO,
+    top_p: float = 0.8,  # [0, 1]
+    timeout: int = 10,
+    api_key: str = OPENAI_API_KEY,
+) -> dict:
+
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Content-Type": APPLICATION_JSON,
+        "Authorization": f"Bearer {api_key}",
+    }
+
+    body = {
+        "messages": list(map(lambda m: asdict(m), messages)),
+        "model": model.value,
+        "top_p": top_p,
+        # "response_format": {"type": "json_object"},
+    }
+
+    transport = httpx.AsyncHTTPTransport(retries=2)
+    client = httpx.AsyncClient(transport=transport)
+
+    max_try = 3
+    while max_try > 0:
+        try:
+            response = await client.post(
+                url=_CHAT_API_URL,
+                headers=headers,
+                json=body,
+                follow_redirects=True,
+                timeout=timeout,
+            )
+            break
+        except Exception as e:
+            # logger.exception(f"chat, but has exception, e={e}")
+            print(f"chat, but has exception, e={e}")
+            time.sleep(5)
+            max_try -= 1
+
+    # try:
+    #     response = await client.post(
+    #         url=_CHAT_API_URL,
+    #         headers=headers,
+    #         json=body,
+    #         follow_redirects=True,
+    #         timeout=timeout,
+    #     )
+    # finally:
+    #     await client.aclose()
+
+    if response.status_code not in range(200, 400):
+        raise (response.status_code, response.text)
+
+    # Automatically .aclose() if the response body is read to completion.
+    return response.json()
