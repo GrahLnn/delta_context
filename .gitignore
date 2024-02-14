@@ -3,5 +3,6 @@ cache/
 video/
 src/env/env.py
 **/__pycache__/
-src/exprement/
+exprement/
 src/utils/model/
+test.py
