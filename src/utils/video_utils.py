@@ -140,7 +140,7 @@ Based context information translate following title to Chinese:
     )
     key_words = get_completion(
         video_info["description"],
-        sys_prompt=f"选择三个词语作为标签并以逗号隔开",
+        sys_prompt="选择八个词语作为标签并以逗号隔开",
     )
     video_info["normalized_title"] = f"【{title}】【中字】"
     video_info["normalized_description"] = (

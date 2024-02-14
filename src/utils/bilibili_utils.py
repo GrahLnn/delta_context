@@ -12,28 +12,32 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from .captcha_utils import predict
+import json
+import base64
 
 
 def get_location(element, browser):
     # 获取元素在屏幕上的位置信息
     location = element.location
-    size = element.size
-    height = size["height"]
-    width = size["width"]
-    left = location["x"]
-    top = location["y"]
-    right = left + width
-    bottom = top + height
-    script = f"return {{'left': {left}, 'top': {top}, 'right': {right}, 'bottom': {bottom}}};"
-    rect = browser.execute_script(script)
+    # size = element.size
+    # height = size["height"]
+    # width = size["width"]
+    # left = location["x"]
+    # top = location["y"]
+    # right = left + width
+    # bottom = top + height
+    # script = f"return {{'left': {left}, 'top': {top}, 'right': {right}, 'bottom': {bottom}}};"
+    # rect = browser.execute_script(script)
 
-    # # 计算元素的中心坐标
-    # center_x = int((rect['left'] + rect['right']) / 2)
-    # center_y = int((rect['top'] + rect['bottom']) / 2)
-    # # 计算元素左上
-    center_x = int(rect["left"])
-    center_y = int(rect["top"])
-    return center_x, center_y
+    # # # 计算元素的中心坐标
+    # # center_x = int((rect['left'] + rect['right']) / 2)
+    # # center_y = int((rect['top'] + rect['bottom']) / 2)
+    # # # 计算元素左上
+    # center_x = int(rect["left"])
+    # center_y = int(rect["top"])
+    x = location.get("x")
+    y = location.get("y")
+    return x, y
 
 
 def get_credential():
@@ -44,7 +48,7 @@ def get_credential():
     Returns:
         Credential: Bilibili API登录凭证。
     """
-    credential_path = "cache/credential.pkl"
+    credential_path = "asset/cookie/credential.pkl"
 
     def login_and_save_credential():
         """
@@ -144,7 +148,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
 
     chrome_binary_path = os.path.expanduser("~/chrome-linux64/chrome")
     options = Options()
-    options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+    options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     options.binary_location = chrome_binary_path
     # options.add_argument("--verbose")
     options.add_argument("--no-sandbox")
@@ -157,6 +161,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
     )  # Overcome limited resource problems
 
     driver = webdriver.Chrome(options=options)
+    # driver.maximize_window()
     # 打开一个页面
     driver.get("https://www.bilibili.com")
 
@@ -247,7 +252,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
 
         tag_input.send_keys(Keys.ENTER)
         # time.sleep(1)
-        print("tag", tag)
+
         try:
             wait.until(
                 EC.presence_of_element_located(
@@ -257,7 +262,8 @@ def upload(path_to_file, img_path, tags, desc, title, season):
                     )
                 )
             )
-        except:
+            print("tag", tag)
+        except Exception:
             # print("tag retry")
             # wait.until(
             #     EC.presence_of_element_located(
@@ -421,8 +427,8 @@ def upload(path_to_file, img_path, tags, desc, title, season):
         By.XPATH,
         "//span[@class='submit-add' and contains(text(), '立即投稿')]",
     ).click()
-    for entry in driver.get_log("browser"):
-        print("browser", entry)
+    # for entry in driver.get_log("browser"):
+    #     print("browser", entry)
     time.sleep(1)
     driver.save_screenshot("4.png")
     try:
@@ -434,7 +440,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
                 )
             )
         )
-    except:
+    except Exception:
         xpath = '//*[@class="geetest_item_wrap"]'
         captcha_elem = wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
         f = captcha_elem.get_attribute("style")
@@ -442,24 +448,32 @@ def upload(path_to_file, img_path, tags, desc, title, season):
         captcha_url = captcha_url[0] if captcha_url else None
         if not captcha_url:
             raise ValueError("captcha url not found")
-        img = httpx.get(captcha_url).content
+        img_bytes = httpx.get(captcha_url).content
+        img_base64_str = base64.b64encode(img_bytes).decode("utf-8")
         url = "http://127.0.0.1:5000/detect"
-        data = {"image_path": img}
+        data = {"image_base64": img_base64_str}
         response = httpx.post(url, json=data)
         detection_list = response.json()
-
+        if "error" in detection_list:
+            raise ValueError(detection_list["error"])
+        print("response", response)
+        print("detection_list", detection_list)
         # 送入模型识别
-        plan = predict(img, detection_list)
-        print(plan)
+        plan = predict(img_bytes, detection_list)
+        print("plan", plan)
         # 获取验证码坐标
-        X, Y = get_location(captcha_elem)
+        element = driver.find_element(By.CLASS_NAME, "geetest_item_wrap")
+        # X, Y = get_location(element, driver)
+        X, Y = element.location["x"], element.location["y"] - 1015
+        print("captcha_elem", X, Y)
         # 前端展示对于原图的缩放比例
         lan_x = 306 / 334
         lan_y = 343 / 384
-        for crop in plan:
+        for i, crop in enumerate(plan):
             x1, y1, x2, y2 = crop
             x, y = [(x1 + x2) / 2, (y1 + y2) / 2]
-            print(x, y)
+            print(X + x * lan_x, Y + y * lan_y)
+
             ActionChains(driver).move_by_offset(
                 X + x * lan_x, Y + y * lan_y
             ).click().perform()
@@ -467,12 +481,13 @@ def upload(path_to_file, img_path, tags, desc, title, season):
                 -(X + x * lan_x), -(Y + y * lan_y)
             ).perform()  # 将鼠标位置恢复到移动前
             time.sleep(0.5)
-        xpath = "/html/body/div[4]/div[2]/div[6]/div/div/div[3]/a/div"
+            driver.save_screenshot(f"click{i}.png")
+        xpath = '//*[@class="geetest_commit_tip"]'
         wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
 
         time.sleep(1)
-        xpath = "/html/body/div[4]/div[2]/div[6]/div/div/div[3]/div/a[2]"
-        wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
+        # xpath = "/html/body/div[4]/div[2]/div[6]/div/div/div[3]/div/a[2]"
+        # wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
         wait.until(
             EC.presence_of_element_located(
                 (
@@ -482,7 +497,28 @@ def upload(path_to_file, img_path, tags, desc, title, season):
             )
         )
         driver.save_screenshot("5.png")
+        logs = driver.get_log("performance")
+        bvid_msg = None
+        for log in logs:
+            if "bvid" in log["message"]:
+                # print(json.loads(log["message"])["message"])
+                bvid_msg = json.loads(log["message"])["message"]["params"]["request"][
+                    "postData"
+                ]
+                break
+        if not bvid_msg:
+            print(logs)
+            raise Exception("bvid not found")
+        print(bvid_msg)
+        reg = r"\|\{.*?\}\|"
+        matches = re.findall(reg, bvid_msg)[0]
+        print(matches)
+        matches = matches.replace("|", "")
+        matches = json.loads(matches)
+
+        res_id = matches["value"]["res"]
 
     print("done")
     driver.quit()
     # time.sleep(1200)
+    return res_id

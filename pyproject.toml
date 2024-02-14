@@ -39,6 +39,7 @@ siamese = {git = "https://github.com/GrahLnn/Siamese-pytorch.git"}
 openai-whisper = "^20231117"
 whisper-timestamped = "^1.14.4"
 redlines = "^0.4.2"
+strenum = "^0.4.15"
 
 
 [[tool.poetry.source]]

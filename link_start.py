@@ -21,6 +21,7 @@ from src.main_auxiliary_utils import (
     download_extract,
     waiting_thread,
     deliver_and_save_completion,
+    comment_tasks,
 )
 from src.env.env import LIMIT_LEN_TIME
 from src.utils.align_utils import align_transcripts
@@ -39,6 +40,10 @@ from src.utils.file_utils import sorted_alphanumeric, delete_contents_of_directo
 from src.utils.audio_utils import calculate_energy
 import datetime
 from redlines import Redlines
+import json
+from src.utils.summary_utils import get_timed_texts, get_summary_text
+from src.utils.video_comment import daemon_thread
+import httpx
 
 # from bilibili_api import settings
 
@@ -65,6 +70,12 @@ video_datas = (
     if playlist_filter
     else video_datas
 )
+capta_server = "http://127.0.0.1:5000/detect"
+try:
+    httpx.post(capta_server)
+except Exception as e:
+    print(e)
+    print("capta server not start")
 
 # sys.exit()
 # thread = threading.Thread(target=manage_video_urls)
@@ -74,10 +85,23 @@ video_datas = (
 video_datas = video_datas[:limit] if limit else video_datas
 # sys.exit()
 # credential = get_credential()
+
+if os.path.exists("cache/comment_task.toml"):
+    with open("cache/comment_task.toml", "rb") as toml_file:
+        pre_comment_task = tomllib.load(toml_file)["comment_task"]
+    comment_tasks.extend(pre_comment_task)
+
+daemon = threading.Thread(target=daemon_thread, args=(comment_tasks,), daemon=True)
+daemon.start()
+
 if os.path.exists("cache/delivery_videos.toml"):
     with open("cache/delivery_videos.toml", "rb") as toml_file:
         delivery_videos = tomllib.load(toml_file)["delivery_videos"]
     deliver_and_save_completion(delivery_videos)
+    video_datas = [
+        item for item in video_datas if item.get("url") not in delivery_videos
+    ]
+
     # asyncio.run(deliver_and_save_completion(delivery_videos, credential))
     # interval_deliver()
 
@@ -145,7 +169,7 @@ for item in video_datas:
         )
 
         waiting_thread(threads)
-        deliver_and_save_completion(videos)
+        comment_task = deliver_and_save_completion(videos)
         # asyncio.run(deliver_and_save_completion(videos, credential))
 
     else:
@@ -313,6 +337,12 @@ for item in video_datas:
                 clip_id,
                 video_name,
             )
+            subtitle_json_file = f"subtitles={subtitle_path}/{clip_id}.json"
+            subtitle_json = json.load(open(subtitle_json_file, "r"))
+            timed_texts = get_timed_texts(subtitle_json)
+            summary = asyncio.run(get_summary_text(timed_texts))
+            info["summary"] = summary
+            save_cache(info, info_path)
             print(
                 (
                     f"Done processing clip {idx+1} of {len(audio_clips)}. Starting next clip."
@@ -349,12 +379,13 @@ for item in video_datas:
             shutil.copy(video_clips_path[0], f"{fpath}/{fname}_zh.mp4")
         # sys.exit()
         videos = get_deliver_video(
-            cpath, fid, fpath, fname, uploader, item.get("url")
+            cpath, fid, fpath, fname, uploader, item.get("url"), summary=summary
         )  # TODO: 判断分区字符数描述限制
 
-        print(videos)
+        # print(videos)
         # sys.exit(1)
         deliver_and_save_completion(videos)
+
         # asyncio.run(deliver_and_save_completion(videos, credential))
         delete_contents_of_directory(f"{clip_path}/translate_video")
         if os.path.exists("cache/un_complete_video.toml"):

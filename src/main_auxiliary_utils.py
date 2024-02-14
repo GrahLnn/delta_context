@@ -15,7 +15,7 @@ from src.utils.trimming_sentence_utils import (
 )
 
 from src.utils.subtitle_utils import get_writer
-from src.utils.cache_utils import save_cache, load_channels, get_or_cache
+from src.utils.cache_utils import save_cache, load_channels, get_or_cache, load_cache
 from src.utils.video_utils import video_file_info
 from src.utils.status_utils import print_status
 from src.utils.audio_utils import extract_vocal
@@ -27,12 +27,14 @@ from src.utils.deliver_utils import (
 
 # from src.utils.LLM_utils import cost_calculator
 from src.utils.bilibili_utils import upload
+from src.utils.video_comment import video_info
 from pydub import AudioSegment
 from moviepy.editor import VideoFileClip
 from datetime import datetime, timedelta
 from redlines import Redlines
 import re
 import string
+from bilibili_api import sync
 
 
 def download_extract(item):
@@ -468,7 +470,7 @@ def save_subtitle(subtitle_path, audio_path, result):
 
 
 def get_deliver_video(
-    cache_path, file_id, file_path, file_name, uploader, url, state=True
+    cache_path, file_id, file_path, file_name, uploader, url, state=True, summary=[]
 ):
     title, output_video_path, thumbnail_path, tag, desc, season = load_video_info(
         cache_path, file_id, file_path, file_name, state
@@ -483,9 +485,12 @@ def get_deliver_video(
         with open("cache/delivery_videos.toml", "rb") as toml_file:
             delivery_videos = tomllib.load(toml_file)["delivery_videos"]
 
+    info_path = f"{cache_path}/{file_id}.toml"
     item = make_delivery_info(
         title, output_video_path, thumbnail_path, tag, desc, tid, url, season
     )
+    item["MetaDataPath"] = info_path
+    item["Summary"] = summary
 
     if item not in delivery_videos:
         delivery_videos.append(item)
@@ -493,6 +498,9 @@ def get_deliver_video(
         #     data = {"delivery_videos": delivery_videos}
         #     toml.dump(data, toml_file)
     return delivery_videos
+
+
+comment_tasks = []
 
 
 def deliver_and_save_completion(items, credential=None):
@@ -503,7 +511,7 @@ def deliver_and_save_completion(items, credential=None):
 
         while retry_count < max_retries:
             try:
-                upload(
+                res_ids = upload(
                     item["Video"],
                     item["Thumbnail"],
                     item["Tag"],
@@ -511,7 +519,23 @@ def deliver_and_save_completion(items, credential=None):
                     item["Title"],
                     item["Season"],
                 )
+                info = load_cache(item["MetaDataPath"])
+                info["aid"] = res_ids["aid"]
+                info["bvid"] = res_ids["bvid"]
+                info["summary"] = item["Summary"]
+                save_cache(info, item["MetaDataPath"])
                 # await deliver(item, credential)
+                # 将id写入视频的meta data文件里，然后将当前时间，id，summary交给另一个线程去做置顶评论
+                if item["Summary"]:
+                    comment_tasks.append(
+                        {
+                            "time": datetime.now().timestamp(),
+                            "bvid": res_ids["bvid"],
+                            "aid": res_ids["aid"],
+                            "summary": item["Summary"],
+                        }
+                    )
+
                 break
 
             except Exception as e:

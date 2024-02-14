@@ -10,7 +10,16 @@ from src.env.env import OPENAI_API_KEY
 
 
 import httpx
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from enum import unique
+from strenum import StrEnum
+
+
+class TokenLimit:
+    GPT_3_5_TURBO = 16384
+    # GPT_3_5_TURBO_16K = 16384
+    GPT_4 = 8192
+    GPT_4_32K = 32768
 
 
 def timeout(seconds):
@@ -118,15 +127,7 @@ def get_completion(
     # response = openai_completion(
     #     prompt, sys_prompt, model, temperature, top_p, json_output
     # )
-    sleep_time = 1
-    while not checker.can_execute_request():
-        print(
-            f"Network unstable, waiting...{sleep_time}s",
-            end="\r",
-            flush=True,
-        )
-        time.sleep(1)
-        sleep_time += 1
+
     mas_retry = 2
     while True:
         try:
@@ -197,7 +198,7 @@ def generate_payload(
     history,
     system_prompt,
     stream,
-    model="gpt-3.5-turbo-1106",
+    model="gpt-3.5-turbo-1025",
     json_output=False,
 ):
     """
@@ -239,12 +240,6 @@ def generate_payload(
         "frequency_penalty": 0,
         "response_format": {"type": "json_object"} if json_output else None,
     }
-
-    # 打印调试信息
-    # try:
-    #     print(f"{model} : {len(history)//2} : {inputs[:100]} ..........")
-    # except:
-    #     print("输入中可能存在乱码。")
 
     return headers, payload
 
@@ -288,44 +283,20 @@ def decode_chunk(chunk):
     return chunk_decoded, chunkjson, has_choices, choice_valid, has_content, has_role
 
 
-def predict_no_ui_long_connection(
-    inputs,
-    sys_prompt="",
-    history=[],
-    observe_window=None,
-    console_slience=False,
-    json_output=False,
-    model="gpt-3.5-turbo-0125 ",
-):
-    """
-    发送至chatGPT，等待回复，一次性完成，不显示中间过程。但内部用stream的方法避免中途网线被掐。
-    inputs：
-        是本次问询的输入
-    sys_prompt:
-        系统静默prompt
-    llm_kwargs：
-        chatGPT的内部调优参数
-    history：
-        是之前的对话列表
-    observe_window = None：
-        用于负责跨越线程传递已经输出的部分，大部分时候仅仅为了fancy的视觉效果，留空即可。observe_window[0]：观测窗。observe_window[1]：看门狗
-    """
-    if model == "gpt-4":
-        model = "gpt-4-0125-preview"
-    watch_dog_patience = 5  # 看门狗的耐心, 设置5秒即可
-    headers, payload = generate_payload(
-        inputs,
-        history,
-        system_prompt=sys_prompt,
-        stream=True,
-        model=model,
-        json_output=json_output,
-    )
+def chat_complation(headers, payload, MAX_RETRY=5):
     retry = 0
     while True:
         try:
             # make a POST request to the API endpoint, stream=False
-
+            sleep_time = 1
+            while not checker.can_execute_request():
+                print(
+                    f"Network unstable, waiting...{sleep_time}s",
+                    end="\r",
+                    flush=True,
+                )
+                time.sleep(1)
+                sleep_time += 1
             endpoint = "https://api.openai.com/v1/chat/completions"
             response = requests.post(
                 endpoint,
@@ -391,18 +362,9 @@ def predict_no_ui_long_connection(
         if "role" in delta:
             continue
         if "content" in delta:
+            print(delta["content"], end="", flush=True)
             result += delta["content"]
-            # if not console_slience:
-            #     print(delta["content"], end="")
 
-            if observe_window is not None:
-                # 观测窗，把已经获取的数据显示出去
-                if len(observe_window) >= 1:
-                    observe_window[0] += delta["content"]
-                # 看门狗，如果超过期限没有喂狗，则终止
-                if len(observe_window) >= 2:
-                    if (time.time() - observe_window[1]) > watch_dog_patience:
-                        raise RuntimeError("用户取消了程序。")
         else:
             raise RuntimeError("意外Json结构：" + delta)
     if json_data and json_data["finish_reason"] == "content_filter":
@@ -411,6 +373,42 @@ def predict_no_ui_long_connection(
         raise ConnectionAbortedError(
             "正常结束，但显示Token不足，导致输出不完整，请削减单次输入的文本量。"
         )
+
+    return result
+
+
+def predict_no_ui_long_connection(
+    inputs,
+    sys_prompt="",
+    history=[],
+    json_output=False,
+    model="gpt-3.5-turbo-0125 ",
+):
+    """
+    发送至chatGPT，等待回复，一次性完成，不显示中间过程。但内部用stream的方法避免中途网线被掐。
+    inputs：
+        是本次问询的输入
+    sys_prompt:
+        系统静默prompt
+    llm_kwargs：
+        chatGPT的内部调优参数
+    history：
+        是之前的对话列表
+    observe_window = None：
+        用于负责跨越线程传递已经输出的部分，大部分时候仅仅为了fancy的视觉效果，留空即可。observe_window[0]：观测窗。observe_window[1]：看门狗
+    """
+    if model == "gpt-4":
+        model = "gpt-4-0125-preview"
+
+    headers, payload = generate_payload(
+        inputs,
+        history,
+        system_prompt=sys_prompt,
+        stream=True,
+        model=model,
+        json_output=json_output,
+    )
+    result = chat_complation(headers, payload)
     # print()
     enc = tiktoken.encoding_for_model(model)
     count_input_token = len(enc.encode(inputs + " " + sys_prompt))
@@ -678,10 +676,12 @@ def gpt2pair(tc, tl, model="gpt-3.5-turbo-16k"):
     return w
 
 
-class Model:
+@unique
+class Model(StrEnum):
     GPT_3_5_TURBO = "gpt-3.5-turbo-0125"
 
 
+@dataclass
 class Message:
     role: str = ""  # required.
     content: str = ""  # required.
@@ -703,7 +703,7 @@ async def chat(
 ) -> dict:
 
     headers = {
-        "User-Agent": USER_AGENT,
+        # "User-Agent": USER_AGENT,
         "Content-Type": APPLICATION_JSON,
         "Authorization": f"Bearer {api_key}",
     }
@@ -712,42 +712,47 @@ async def chat(
         "messages": list(map(lambda m: asdict(m), messages)),
         "model": model.value,
         "top_p": top_p,
+        "temperature": 0,
+        "stream": True,
         # "response_format": {"type": "json_object"},
     }
 
-    transport = httpx.AsyncHTTPTransport(retries=2)
-    client = httpx.AsyncClient(transport=transport)
-
-    max_try = 3
-    while max_try > 0:
-        try:
-            response = await client.post(
-                url=_CHAT_API_URL,
-                headers=headers,
-                json=body,
-                follow_redirects=True,
-                timeout=timeout,
-            )
-            break
-        except Exception as e:
-            # logger.exception(f"chat, but has exception, e={e}")
-            print(f"chat, but has exception, e={e}")
-            time.sleep(5)
-            max_try -= 1
-
-    # try:
-    #     response = await client.post(
-    #         url=_CHAT_API_URL,
-    #         headers=headers,
-    #         json=body,
-    #         follow_redirects=True,
-    #         timeout=timeout,
-    #     )
-    # finally:
-    #     await client.aclose()
-
-    if response.status_code not in range(200, 400):
-        raise (response.status_code, response.text)
+    result = chat_complation(headers, body)
 
     # Automatically .aclose() if the response body is read to completion.
-    return response.json()
+    return result
+
+
+_encoding_for_chat = tiktoken.get_encoding("cl100k_base")
+
+
+def count_tokens(messages: list[Message]) -> int:
+    tokens_count = 0
+
+    for message in messages:
+        # Every message follows "<im_start>{role/name}\n{content}<im_end>\n".
+        tokens_count += 4
+
+        for key, value in asdict(message).items():
+            tokens_count += len(_encoding_for_chat.encode(value))
+
+            # If there's a "name", the "role" is omitted.
+            if key == "name":
+                # "role" is always required and always 1 token.
+                tokens_count += -1
+
+    # Every reply is primed with "<im_start>assistant".
+    tokens_count += 2
+
+    return tokens_count
+
+
+@unique
+class Role(StrEnum):
+    SYSTEM = "system"
+    ASSISTANT = "assistant"
+    USER = "user"
+
+
+def build_message(role: Role, content: str) -> Message:
+    return Message(role=role.value, content=content.strip())

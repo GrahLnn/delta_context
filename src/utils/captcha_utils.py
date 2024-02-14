@@ -18,8 +18,8 @@ def open_image(file):
 
 
 def predict(img, detection_list):
-    model = Siamese(model_path="model/best_epoch_weights.pth")
-
+    model = Siamese(model_path="asset/model/best_epoch_weights.pth")
+    print(detection_list)
     targets = [i.get("crop") for i in detection_list if i.get("classes") == "target"]
     chars = [i.get("crop") for i in detection_list if i.get("classes") == "char"]
     # 根据坐标进行排序
