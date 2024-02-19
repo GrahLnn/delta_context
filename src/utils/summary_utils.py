@@ -105,9 +105,10 @@ async def _generate_multi_chapters(
             model=model,
             top_p=0.1,
             timeout=90,
+            json_output=True,
         )
 
-        content = content.replace(r"{{", r"{").replace(r"}}", r"}")
+        content = content["job"]
 
         # logger.info(f"generate multi chapters, vid={vid}, content=\n{content}")
 
@@ -224,6 +225,7 @@ async def _generate_chapters_one_by_one(
                 model=Model.GPT_3_5_TURBO,
                 top_p=0.1,
                 timeout=90,
+                json_output=True,
             )
 
             # logger.info(
@@ -403,7 +405,7 @@ async def summarize(
     res = await asyncio.gather(*tasks, return_exceptions=True)
     for r in res:
         if isinstance(r, Exception):
-            print(f"summarize, but has exception, e={r}")
+            raise (f"summarize, but has exception, e={r}")
 
     return chapters
 

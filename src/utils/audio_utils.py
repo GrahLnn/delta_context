@@ -8,6 +8,9 @@ from src.env.env import HUGGINGFACE_TOKEN
 import sys
 from voicefixer import VoiceFixer
 from .status_utils import print_status
+from pydub import AudioSegment
+from pathlib import Path
+from tqdm import tqdm
 
 # def vad_clean(audio_path, output_path, output_name):
 #     # Load the Silero VAD model
@@ -182,14 +185,12 @@ def vad_clean(audio_name, output_path, name):
         sf.write(output_name, final_audio, sr)
 
 
-def extract_vocal(audio_path, output_path, output_name):
-    if not os.path.exists(f"{output_path}/clean_vocal"):
-        os.makedirs(f"{output_path}/clean_vocal")
+def clean_vocal(audio_path, output_path):
     arg = {
         "input_audio": [
             f"{audio_path}",
         ],
-        "output_folder": f"{output_path}/clean_vocal",
+        "output_folder": output_path,
         "cpu": False,
         "overlap_demucs": 0.1,
         "overlap_VOCFT": 0.1,
@@ -207,10 +208,72 @@ def extract_vocal(audio_path, output_path, output_name):
     }
     start(arg)
 
+
+def split_audio(file_path, output_path, segment_length=2400):
+    """
+    Split an audio file into multiple segments of a given length.
+
+    :param file_path: Path to the audio file.
+    :param segment_length: Length of each segment in seconds (default is 2400 seconds, i.e., 40 minutes).
+    :return: None
+    """
+    # 加载音频文件
+    audio = AudioSegment.from_file(file_path)
+
+    # 计算分割的数量
+    num_segments = len(audio) // (segment_length * 1000)
+
+    for i in tqdm(range(num_segments), desc="Splitting audio into segments"):
+        # 计算每个段落的开始和结束时间
+        start_time = i * segment_length * 1000
+        end_time = (i + 1) * segment_length * 1000
+
+        # 切割音频
+        segment = audio[start_time:end_time]
+
+        # 保存分割后的音频段落
+        segment.export(f"{output_path}/segment_{i + 1}.wav", format="wav")
+
+
+def extract_vocal(audio_path, output_path, output_name):
+    os.makedirs(f"{output_path}/clean_vocal", exist_ok=True)
+    os.makedirs(f"{output_path}/clean_speaker", exist_ok=True)
+    os.makedirs(f"{output_path}/split_seg", exist_ok=True)
+
+    split_audio(audio_path, f"{output_path}/split_seg")
+    folder = Path(f"{output_path}/split_seg")
+    file_paths = list(folder.glob("*.wav"))
+    file_paths.sort(key=lambda x: x.stat().st_ctime)
+    for file_path in tqdm(file_paths, desc="Extracting vocals"):
+        # 拼接完整的输入路径和输出路径
+        input_path = str(file_path)
+        # output_path = str(
+        #     file_path.with_suffix(".cleaned.mp3")
+        # )  # 例如: segment_1.cleaned.mp3
+
+        # 调用 clean_vocal 函数
+        clean_vocal(input_path, f"{output_path}/clean_vocal")
+
+    folder = Path(f"{output_path}/clean_vocal")
+    file_paths = list(folder.glob("*.wav"))
+    file_paths.sort(key=lambda x: x.stat().st_ctime)
+    # 将所有音频文件合并成一个
+    combined_audio = AudioSegment.empty()
+    for file_path in file_paths:
+        combined_audio += AudioSegment.from_file(file_path)
+
+    # 保存合并后的音频文件
+    combined_audio.export(
+        f"{output_path}/clean_speaker/{output_name}.clean.wav", format="wav"
+    )
+    # 删除clean_vocal和split_seg文件夹
+    shutil.rmtree(f"{output_path}/clean_vocal")
+    shutil.rmtree(f"{output_path}/split_seg")
+
     flag = [True]
     # print_status(flag, "vad clean")
     vad_clean(
-        f"{output_path}/clean_vocal/{output_name}_vocals.wav",
+        f"{output_path}/clean_speaker/{output_name}.clean.wav",
         output_path,
         output_name,
     )

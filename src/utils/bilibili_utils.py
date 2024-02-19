@@ -496,29 +496,29 @@ def upload(path_to_file, img_path, tags, desc, title, season):
                 )
             )
         )
-        driver.save_screenshot("5.png")
-        logs = driver.get_log("performance")
-        bvid_msg = None
-        for log in logs:
-            if "bvid" in log["message"]:
-                # print(json.loads(log["message"])["message"])
-                bvid_msg = json.loads(log["message"])["message"]["params"]["request"][
-                    "postData"
-                ]
-                break
-        if not bvid_msg:
-            print(logs)
-            raise Exception("bvid not found")
-        print(bvid_msg)
-        reg = r"\|\{.*?\}\|"
-        matches = re.findall(reg, bvid_msg)[0]
-        print(matches)
-        matches = matches.replace("|", "")
-        matches = json.loads(matches)
+    driver.save_screenshot("5.png")
+    logs = driver.get_log("performance")
+    bvid_msg = None
+    for log in logs:
+        if "bvid" in log["message"]:
+            # print(json.loads(log["message"])["message"])
+            bvid_msg = json.loads(log["message"])["message"]["params"]["request"][
+                "postData"
+            ]
+            break
+    if not bvid_msg:
+        print(logs)
+        raise Exception("bvid not found")
+    print(bvid_msg)
+    reg = r"\|\{.*?\}\|"
+    matches = re.findall(reg, bvid_msg)[0]
+    print(matches)
+    matches = matches.replace("|", "")
+    matches = json.loads(matches)
 
-        res_id = matches["value"]["res"]
+    res_id = matches["value"]["res"]
 
-    print("done")
+    print("done aid and bvid", res_id)
     driver.quit()
     # time.sleep(1200)
     return res_id

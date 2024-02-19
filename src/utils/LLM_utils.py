@@ -700,6 +700,7 @@ async def chat(
     top_p: float = 0.8,  # [0, 1]
     timeout: int = 10,
     api_key: str = OPENAI_API_KEY,
+    json_output: bool = False,
 ) -> dict:
 
     headers = {
@@ -714,7 +715,7 @@ async def chat(
         "top_p": top_p,
         "temperature": 0,
         "stream": True,
-        # "response_format": {"type": "json_object"},
+        "response_format": {"type": "json_object"} if json_output else None,
     }
 
     result = chat_complation(headers, body)

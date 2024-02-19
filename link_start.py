@@ -44,6 +44,9 @@ import json
 from src.utils.summary_utils import get_timed_texts, get_summary_text
 from src.utils.video_comment import daemon_thread
 import httpx
+import atexit
+from src.utils.cache_utils import save_tasklist
+from queue import Queue
 
 # from bilibili_api import settings
 
@@ -51,10 +54,10 @@ import httpx
 checker.start()
 limit = None
 addition = [
-    {
-        "url": "https://www.youtube.com/watch?v=jrVQXHmxH7Y",
-        "uploader": "@TheRoyalInstitution",
-    }
+    # {
+    #     "url": "https://www.youtube.com/watch?v=jrVQXHmxH7Y",
+    #     "uploader": "@TheRoyalInstitution",
+    # }
 ]
 channel_filter = []
 playlist_filter = ["Flutter Package of the Week", "Flutter Widget of the Week"]
@@ -86,13 +89,24 @@ video_datas = video_datas[:limit] if limit else video_datas
 # sys.exit()
 # credential = get_credential()
 
+# 加载之前的任务
 if os.path.exists("cache/comment_task.toml"):
-    with open("cache/comment_task.toml", "rb") as toml_file:
-        pre_comment_task = tomllib.load(toml_file)["comment_task"]
-    comment_tasks.extend(pre_comment_task)
+    try:
+        with open("cache/comment_task.toml", "rb") as toml_file:
+            pre_comment_task = tomllib.load(toml_file)["comment_task"]
+        comment_tasks.extend(pre_comment_task)
+    except Exception as e:
+        print("Error loading tasks:", e)
 
-daemon = threading.Thread(target=daemon_thread, args=(comment_tasks,), daemon=True)
+
+atexit.register(save_tasklist, comment_tasks)
+# 初始化队列
+
+
+daemon = threading.Thread(target=daemon_thread)
+daemon.setDaemon(True)
 daemon.start()
+
 
 if os.path.exists("cache/delivery_videos.toml"):
     with open("cache/delivery_videos.toml", "rb") as toml_file:
@@ -337,7 +351,7 @@ for item in video_datas:
                 clip_id,
                 video_name,
             )
-            subtitle_json_file = f"subtitles={subtitle_path}/{clip_id}.json"
+            subtitle_json_file = f"{subtitle_path}/{clip_id}.json"
             subtitle_json = json.load(open(subtitle_json_file, "r"))
             timed_texts = get_timed_texts(subtitle_json)
             summary = asyncio.run(get_summary_text(timed_texts))

@@ -4,6 +4,7 @@ from src.utils.cache_utils import load_channels, load_cache
 from tqdm import tqdm
 from .utils.LLM_utils import get_completion
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from .utils.status_utils import countdown
 
 
 def extract_url_info(url):
@@ -229,7 +230,10 @@ def manage_video_urls():
             with open("cache/channels_video.toml", "w") as toml_file:
                 data = {"videos": urls}
                 toml.dump(data, toml_file)
-        time.sleep(60 * 60 * 24)  # 每次检查后等待 24 小时
+            countdown(60 * 60 * 24 * 7, "Video URLs updated.", "update again.")
+
+        else:
+            countdown(60 * 60 * 24, "Video URLs are up to date.", "check again.")
 
 
 def get_all_video_urls(force_update=False):

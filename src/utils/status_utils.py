@@ -32,6 +32,18 @@ def status_circle(flag, message):
     )
 
 
+def countdown(t, desc="", next_operation=""):
+    while t:
+        days, remainder = divmod(t, 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        timer = f"{desc} Waiting for {days}d:{hours:02}h:{minutes:02}m:{seconds:02}s to {next_operation}          "
+        print(timer, end="\r")
+        time.sleep(1)
+        t -= 1
+    # print("Countdown finished!")
+
+
 def print_status(flag, desc=""):
     state_thread = threading.Thread(target=status_circle, args=(flag, desc))
     state_thread.start()

@@ -1,7 +1,7 @@
 import re, difflib, random, spacy, copy, string
 from difflib import SequenceMatcher
 from spacy.matcher import Matcher
-
+import regex
 
 # from .list_utils import split_list
 
@@ -471,11 +471,11 @@ def combine_words(word_list, base_max_length=25):
 
     # 首先计算整个列表的总长度
     total_length = sum(
-        1
-        if re.match(r"[A-Za-z]+", word)
-        else len(word)
-        if not re.match(r"\W", word)
-        else 0
+        (
+            1
+            if re.match(r"[A-Za-z]+", word)
+            else len(word) if not re.match(r"\W", word) else 0
+        )
         for word in word_list
     )
 
@@ -495,9 +495,7 @@ def combine_words(word_list, base_max_length=25):
         word_length = (
             1
             if re.match(r"[A-Za-z]+", word)
-            else len(word)
-            if not re.match(r"\W", word)
-            else 0
+            else len(word) if not re.match(r"\W", word) else 0
         )
 
         if current_length + word_length <= max_length:
@@ -525,6 +523,21 @@ def strip_chinese_punctuation(text, punctuation="。，；？！《》"):
 
     # 使用正则表达式的 sub 方法去除这些标点符号
     return re.sub(pattern, "", text)
+
+
+def extract_text_and_numbers(text):
+    # 使用正则表达式找到匹配 \p{L} 或 \p{N} 的第一个字符
+    start_match = regex.search(r"[\p{L}\p{N}]", text)
+    # 使用正则表达式找到匹配 \p{L} 或 \p{N} 的最后一个字符
+    end_match = regex.search(r"[\p{L}\p{N}](?!.*[\p{L}\p{N}])", text)
+
+    if start_match and end_match:
+        start_index = start_match.start()
+        end_index = end_match.start() + 1  # 包含最后一个匹配字符
+        return text[start_index:end_index]
+    else:
+        # 如果没有找到匹配的字符，则返回空字符串
+        return ""
 
 
 # import spacy
@@ -580,3 +593,147 @@ def strip_chinese_punctuation(text, punctuation="。，；？！《》"):
 # doc = nlp(text)
 # new_text = replace_with_numbers_and_greek(doc)
 # print(new_text)  # I have 1 apple and 2 bananas. Also , I know α , β , and γ .
+
+
+def make_tag_info(diff_markdown):
+    diff_list = diff_markdown.split()
+    operations = []
+    for idx, word in enumerate(diff_list):
+        # stage: list = ["delete", "replace", "insert"]
+        if word.startswith("<del>"):
+            operations.append({"stage": "delete", "start_idx": idx})
+        elif word.startswith("</del><ins>"):
+            operations[-1]["stage"] = "replace"
+        elif word.startswith("<ins>"):
+            operations.append({"stage": "insert", "start_idx": idx})
+        elif word.startswith("</del>"):
+            operations[-1]["end_idx"] = idx
+        elif word.startswith("</ins>"):
+            operations[-1]["end_idx"] = idx
+            # operations[-1]["id_str"] = " ".join(diff_list[operations[-1]["start_idx"] + 1 : idx])
+    for idx, op in enumerate(operations):
+        if op["stage"] != "insert":
+            check_text = " ".join(diff_list[op["start_idx"] : op["end_idx"]])
+            try:
+                operations[idx]["del_text"] = re.search(
+                    r"<del>(.*?)</del>",
+                    check_text,
+                ).group(1)
+                operations[idx]["ins_text"] = check_text.replace(
+                    f"<del>{operations[idx]['del_text']}</del>", ""
+                ).replace("<ins>", "")
+            except Exception:
+                operations[idx]["del_text"] = check_text.replace("<del>", "")
+        else:
+
+            if idx + 1 < len(operations):
+                operations[idx]["id_str"] = " ".join(
+                    diff_list[op["start_idx"] : operations[idx + 1]["start_idx"]]
+                )
+            else:
+                operations[idx]["id_str"] = " ".join(diff_list[op["start_idx"] :])
+            id_str = operations[idx]["id_str"]
+            operations[idx]["ins_text"] = re.search(r"<ins>(.*?)</ins>", id_str).group(
+                1
+            )
+            operations[idx]["id_str"] = id_str.replace(
+                f"<ins>{operations[idx]['ins_text']}</ins>", ""
+            )
+
+            # print(operations[idx])
+
+    ins_tags = re.finditer(r"<ins>.*?</ins>", diff_markdown)
+    new_text = diff_markdown
+    for tag in ins_tags:
+        new_text = new_text.replace(tag.group(), "")
+    # print(new_text)
+    del_operations = [op for op in operations if op["stage"] != "insert"]
+
+    ins_operations = [op for op in operations if op["stage"] == "insert"]
+    # print(del_operations)
+
+    opera_count = 0
+    for i, text in enumerate(new_text.split()):
+        if "<del>" in text:
+            del_operations[opera_count]["start_idx"] = i
+            del_operations[opera_count]["end_idx"] = i + len(
+                del_operations[opera_count]["del_text"].split()
+            )
+            opera_count += 1
+
+    operations = del_operations + ins_operations
+
+    return operations
+
+
+def find_sublist_indices(sublist, parent_list):
+    # 找出子列表长度
+    sublist_length = len(sublist)
+    # 遍历父列表，直到剩余元素数量小于子列表长度
+    for i in range(len(parent_list) - sublist_length + 1):
+        # 如果从当前位置开始的子序列与子列表匹配
+        if parent_list[i : i + sublist_length] == sublist:
+            return i, i + sublist_length - 1
+    # 如果找不到匹配的子列表，返回None
+    return None
+
+
+def make_words_equal(words, del_info):
+    nwords = copy.deepcopy(words)
+    insert_tasks = []
+    for info in del_info:
+        if info["stage"] == "delete":
+            s_idx = info["start_idx"]
+            e_idx = info["end_idx"]
+
+            # print("delete:")
+            # print(info["del_text"])
+            # print([w["word"] for w in nwords[s_idx:e_idx]])
+            nwords[s_idx:e_idx] = [{}] * (e_idx - s_idx)
+        elif info["stage"] == "replace":
+            # print("replace:")
+            s_idx = info["start_idx"]
+            e_idx = info["end_idx"]
+            temp_words = nwords[s_idx:e_idx]
+            ins_texts = info["ins_text"].split()
+            ins_words = []
+            for idx, word in enumerate(ins_texts):
+                if idx == 0:
+                    n = temp_words[0]
+                    m = copy.deepcopy(n)
+                    m["word"] = word
+                    ins_words.append(m)
+                else:
+                    n = temp_words[-1]
+                    m = copy.deepcopy(n)
+                    m["word"] = word
+                    ins_words.append(m)
+            # print(nwords[s_idx:e_idx])
+            nwords[s_idx] = ins_words
+            if e_idx - s_idx > 1:
+                nwords[s_idx + 1 : e_idx] = [{}] * (e_idx - s_idx - 1)
+            # print(nwords[s_idx:e_idx])
+        elif info["stage"] == "insert":
+            id_str_list = info["id_str"].split()
+            check_list = [w["word"].strip() for w in words]
+            # print(id_str_list)
+            # print(check_list)
+            id_s_i, id_e_i = find_sublist_indices(id_str_list, check_list)
+
+            # print(id_s_i, id_e_i)
+            n = nwords[id_s_i]
+
+            words_ins = []
+            for string in info["ins_text"].split():
+                m = copy.deepcopy(n)
+                m["word"] = string
+                words_ins.append(m)
+            insert_tasks.append({"s_idx": id_s_i, "words": words_ins})
+    # print("insert_tasks:")
+    # print(insert_tasks)
+    insert_tasks.sort(key=lambda x: x["s_idx"], reverse=True)
+    # do insert
+    for task in insert_tasks:
+        nwords.insert(task["s_idx"], task["words"])
+
+    return nwords

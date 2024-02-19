@@ -2,8 +2,12 @@ from bilibili_api import comment, sync, video
 from .bilibili_utils import get_credential
 import time
 from datetime import datetime
+import sys
+import threading
 
 credential = get_credential()
+comment_tasks = []
+thread_lock = threading.Lock()
 
 
 def split_summary(summary):
@@ -14,7 +18,7 @@ def split_summary(summary):
 
     for s in summary:
         # 如果当前组的长度加上当前摘要的长度超过了1000个字符
-        if current_length + len(s) > 1000:
+        if current_length + len(s) > 900:
             # 将当前组添加到结果列表中
             result.append(current_group)
             # 重置当前组和长度
@@ -67,26 +71,34 @@ async def video_info(bvid):
     # print(info)
 
 
-def daemon_thread(task_list):
+def daemon_thread():
     while True:
-        if task_list:
-            # 获取任务并处理
-            for idx, task in enumerate(task_list):
-                check_time = task.get("time", None)
-                if datetime.now().timestamp() - check_time < 600:
-                    continue
-                try:
+        # 使用线程锁保护对全局列表的访问
+        with thread_lock:
+            # 检查任务列表是否为空
+            if not comment_tasks:
+                continue
 
-                    sync(video_info(task["bvid"]))
+            # 获取任务
+            task = comment_tasks.pop(0)
 
-                except Exception:
-                    current_time = datetime.now().timestamp()
-                    if current_time - task["time"] > 600:
-                        task["time"] = current_time
-                        continue
+        try:
+            # 同步视频信息
+            sync(video_info(task["bvid"]))
+
+            # 检查是否满足发送条件
+            current_time = datetime.now().timestamp()
+            if current_time - task.get("time", current_time) < 600:
+                # 如果不满足条件，稍后重试
+                print("Waiting to send summary", task["bvid"])
+                with thread_lock:
+                    comment_tasks.append(task)  # 将任务重新放回列表
+            else:
+                # 满足条件，发送摘要
                 send_summary(task["summary"], task["aid"])
-                task_list.pop(idx)
-            time.sleep(60)
-        else:
-            # 如果任务列表为空，则等待一段时间再次检查
-            time.sleep(60)
+                print("Send summary comment success", task["bvid"])
+
+        except Exception as e:
+            print("Error processing task", task["bvid"], "Error:", e)
+            with thread_lock:
+                comment_tasks.append(task)  # 出错时，将任务重新放回列表

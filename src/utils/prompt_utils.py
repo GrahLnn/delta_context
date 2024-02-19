@@ -32,14 +32,14 @@ exclude text like "[Music]", "[Applause]", "[Laughter]" and so on.
 Return a JSON array as shown below:
 
 ```json
-[
+{{"job": [
   {{
     "outline": string field, a brief outline title in language "{lang}".
     "information": string field, an useful information in the outline context in language "{lang}".
     "start": int field, the start time of the outline in seconds.
     "timestamp": string field, the start time of the outline in "HH:mm:ss" format.
   }}
-]
+]}}
 ```
 
 Please output JSON only.

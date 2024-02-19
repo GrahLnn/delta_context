@@ -5,7 +5,11 @@ from src.utils.transcribe_utils import (
     find_closest_stamps,
 )
 from src.utils.translate_utils import ask_LLM_to_translate
-
+from src.utils.text_utils import (
+    extract_text_and_numbers,
+    make_words_equal,
+    make_tag_info,
+)
 from src.utils.trimming_sentence_utils import (
     concatenate_sentences_punc_end,
     split_stage_one,
@@ -24,6 +28,8 @@ from src.utils.deliver_utils import (
     make_delivery_info,
     save_completion,
 )
+from src.utils.list_utils import flatten_list
+
 
 # from src.utils.LLM_utils import cost_calculator
 from src.utils.bilibili_utils import upload
@@ -35,6 +41,7 @@ from redlines import Redlines
 import re
 import string
 from bilibili_api import sync
+from src.utils.video_comment import comment_tasks, thread_lock
 
 
 def download_extract(item):
@@ -100,210 +107,33 @@ def chunk_texts(text):
 
 
 def align_due_sentences(texts, cache_path, words):
+
     def check_words_equal(ord_texts, proc_texts, words):
+        # with open("check.toml", "w", encoding="utf-8") as f:
+        #     data = {"a": proc_texts, "b": ord_texts, "c": words}
+        #     toml.dump(data, f)
+        # print("-----------\n-----------")
+        ord_words = copy.deepcopy(words)
         test = Redlines(ord_texts, proc_texts, markdown_style="none")
         text = test.output_markdown
-        tags = [
-            (m.start(), m.group())
-            for m in re.finditer(r"<del>.*?</del>|<ins>.*?</ins>", text)
-        ]
-        # print(tags)
+        try:
 
-        # 初始化del标签的计数器
-        del_count = 0
-
-        # ins_str = {"follow_del_pos": 0, "ins_text": "", "ins_lenth": 0}
-
-        # 遍历tags，同时跟踪<del>和<ins>标签
-        del_info = []
-        for _, tag in tags:
-            if "<del>" in tag:
-                # 计数<del>标签
-                del_count += 1
-
-                del_info.append(
-                    {
-                        "del_text": re.search(r"<del>(.*?)</del>", tag).group(1),
-                        "del_count": del_count,
-                        "ins_text": None,
-                        "ins_lenth": None,
-                        "start_idx": None,
-                        "end_idx": None,
-                    }
-                )
-            elif "<ins>" in tag:
-                # 显示<ins>标签相对于前一个<del>标签的位置
-
-                del_info[-1]["ins_text"] = re.search(r"<ins>(.*?)</ins>", tag).group(1)
-                del_info[-1]["ins_lenth"] = len(
-                    re.search(r"<ins>(.*?)</ins>", tag).group(1).split()
-                )
-
-        # replace所有的<ins>标签
-        for info in del_info:
-            if info["ins_text"]:
-                text = text.replace(
-                    f"<ins>{info['ins_text']}</ins>",
-                    "",
-                )
-
-        split_text = text.split()
-
-        count = 0
-        for idx, text in enumerate(split_text):
-            if "<del>" in text:
-
-                del_info[count]["start_idx"] = idx
-                del_info[count]["end_idx"] = idx + len(
-                    del_info[count]["del_text"].split()
-                )
-                # print(count)
-
-                # _, tag = tags[count]
-
-                if del_info[count]["ins_text"]:
-                    ord = [
-                        w["word"].strip().lower().strip(string.punctuation)
-                        for w in words[
-                            del_info[count]["start_idx"] : del_info[count]["end_idx"]
-                        ]
-                    ]
-
-                    cur = [
-                        w.strip().strip(string.punctuation)
-                        for w in del_info[count]["ins_text"].lower().split()
-                    ]
-                    # print(ord)
-                    # print(cur)
-                    # print(len(a.split()), len(words))
-
-                    diff = Redlines(" ".join(ord), " ".join(cur), markdown_style="none")
-                    diff_text = diff.output_markdown
-                    # print(diff_text)
-
-                    ins_tags = [
-                        (m.start(), m.group())
-                        for m in re.finditer(
-                            r"<del>.*?</del>|<ins>.*?</ins>", diff_text
-                        )
-                    ]
-
-                    del_del_info = []
-                    for _, tag in ins_tags:
-                        if "<del>" in tag:
-                            # 计数<del>标签
-
-                            del_del_info.append(
-                                {
-                                    "del_text": re.search(
-                                        r"<del>(.*?)</del>", tag
-                                    ).group(1),
-                                    "ins_text": None,
-                                    "ins_lenth": None,
-                                    "start_idx": None,
-                                    "end_idx": None,
-                                }
-                            )
-                        elif "<ins>" in tag:
-                            # 显示<ins>标签相对于前一个<del>标签的位置
-
-                            del_del_info[-1]["ins_text"] = re.search(
-                                r"<ins>(.*?)</ins>", tag
-                            ).group(1)
-                            del_del_info[-1]["ins_lenth"] = len(
-                                re.search(r"<ins>(.*?)</ins>", tag).group(1).split()
-                            )
-                    inner_count = 0
-                    for iex, text in enumerate(diff_text.split()):
-                        if "<del>" in text:
-                            del_del_info[inner_count]["start_idx"] = iex
-                            del_del_info[inner_count]["end_idx"] = iex + len(
-                                del_del_info[inner_count]["del_text"].split()
-                            )
-                            inner_count += 1
-                    # for _, tag in ins_tags:
-                    #     if "<ins>" in tag:
-                    #         raise ValueError(f"ins标签不应该存在 {del_info[count]}")
-                    #     elif "<del>" in tag:
-                    #         del_text.append(re.search(r"<del>(.*?)</del>", tag).group(1))
-                    for info in del_del_info:
-                        if info["ins_text"]:
-                            diff_text = diff_text.replace(
-                                f"<ins>{info['ins_text']}</ins>",
-                                "",
-                            )
-                    for info in del_del_info:
-                        if info["ins_text"]:
-                            diff_text = diff_text.replace(
-                                f"<del>{info['del_text']}</del>",
-                                f"{info['del_text']}",
-                            )
-                            if len(info["ins_text"].split()) == len(
-                                info["del_text"].split()
-                            ):
-                                # print(info["start_idx"], info["end_idx"])
-                                # print(
-                                #     words[
-                                #         del_info[count]["start_idx"]
-                                #         + info["start_idx"] : del_info[count]["start_idx"]
-                                #         + info["end_idx"]
-                                #     ]
-                                # )
-                                # change_len = info["end_idx"] - info["start_idx"]
-                                insert_words = info["ins_text"].split()
-                                start_idx = (
-                                    del_info[count]["start_idx"] + info["start_idx"]
-                                )
-                                end_idx = del_info[count]["start_idx"] + info["end_idx"]
-                                for i in range(start_idx, end_idx):
-                                    words[i]["word"] = insert_words[i - start_idx]
-                                # print(
-                                #     words[
-                                #         del_info[count]["start_idx"]
-                                #         + info["start_idx"] : del_info[count]["start_idx"]
-                                #         + info["end_idx"]
-                                #     ]
-                                # )
-                            else:
-                                raise ValueError(
-                                    f"插入和删除的长度不一致 {del_info[count]} {info}"
-                                )
-
-                    # del_text = [w["del_text"] for w in del_del_info]
-                    ins_list = del_info[count]["ins_text"].split()
-
-                    inner_count = 0
-                    ins_inner_count = 0
-                    for iex, text in enumerate(diff_text.split()):
-                        if "<del>" in text:
-                            cur_item_len = len(
-                                del_del_info[inner_count]["del_text"].split()
-                            )
-
-                            words[
-                                del_info[count]["start_idx"]
-                                + iex : del_info[count]["start_idx"]
-                                + iex
-                                + cur_item_len
-                            ] = ["{}"] * cur_item_len
-
-                        else:
-
-                            words[del_info[count]["start_idx"] + iex]["word"] = (
-                                ins_list[ins_inner_count]
-                            )
-                            ins_inner_count += 1
-
-                else:
-                    num_items_to_replace = (
-                        del_info[count]["end_idx"] - del_info[count]["start_idx"]
-                    )
-                    words[del_info[count]["start_idx"] : del_info[count]["end_idx"]] = [
-                        "{}"
-                    ] * num_items_to_replace
-
-                count += 1
-        words = [w for w in words if w != "{}"]
+            del_info = make_tag_info(text)
+            words = make_words_equal(words, del_info)
+            words = flatten_list(words)
+            words = [w for w in words if w != {}]
+        # print(nwords[0:100])
+        except:
+            with open("words_check.toml", "w", encoding="utf-8") as f:
+                data = {
+                    "a": ord_texts,
+                    "b": proc_texts,
+                    "c": " ".join([w["word"].strip() for w in words]),
+                    "diff": text,
+                    "words": ord_words,
+                    "time": datetime.now(),
+                }
+                toml.dump(data, f)
 
         return words
 
@@ -340,20 +170,26 @@ def align_due_sentences(texts, cache_path, words):
         st, strl = clean_sentences(seg_transcripts, seg_translates)
         return {"seg_transcripts": st, "seg_translates": strl}
 
+    words_text = " ".join([w["word"].strip() for w in words])
+    words = check_words_equal(words_text, " ".join(texts), words)
+    print(f'length check: {len(words)}/{len(" ".join(texts).split())}')
+
     result = get_or_cache(f"{cache_path}/LLM_translation.toml", compute_LLM_translation)
     transcripts, translates = result["transcripts"], result["translates"]
     one_transcripts = copy.deepcopy(transcripts)
     words = check_words_equal(" ".join(texts), " ".join(one_transcripts), words)
+
     print(f'length check: {len(words)}/{len(" ".join(transcripts).split())}')
+    if len(words) != len(" ".join(transcripts).split()):
+        raise ValueError("transcripts and words not equal")
 
     # test = Redlines(" ".join(texts), " ".join(transcripts), markdown_style="none")
     # with open("redlines.md", "w", encoding="utf-8") as f:
     #     f.write(test.output_markdown)
 
     if len(transcripts) != len(translates):
-        print("transcripts and translates not equal")
-        print("LLM_translation.toml", len(transcripts), len(translates))
-        sys.exit(1)
+        raise ValueError("transcripts and translates not equal")
+
     # sys.exit(1)
 
     result = get_or_cache(
@@ -367,16 +203,11 @@ def align_due_sentences(texts, cache_path, words):
         " ".join(one_transcripts), " ".join(two_transcripts), words
     )
     print(f'length check: {len(words)}/{len(" ".join(transcripts).split())}')
-
-    # for idx, (a, b) in enumerate(zip(transcripts, translates)):
-    #     if "。" in b[:-1]:
-    #         print(f"[{idx}] \n{a}\n{b}\n")
-    # sys.exit(1)
+    if len(words) != len(" ".join(transcripts).split()):
+        raise ValueError("transcripts and words not equal")
 
     if len(transcripts) != len(translates):
-        print("transcripts and translates not equal")
-        print("split_stage_one.toml", len(transcripts), len(translates))
-        sys.exit(1)
+        raise ValueError("transcripts and translates not equal")
 
     result = get_or_cache(
         f"{cache_path}/split_stage_two.toml",
@@ -387,9 +218,7 @@ def align_due_sentences(texts, cache_path, words):
         result["seg_translates"],
     )
     if len(seg_transcripts) != len(seg_translates):
-        print("seg_transcripts and seg_translates not equal")
-        print("split_stage_two.toml", len(seg_transcripts), len(seg_translates))
-        sys.exit(1)
+        raise ValueError("seg_transcripts and seg_translates not equal")
 
     three_transcripts = copy.deepcopy(seg_transcripts)
 
@@ -397,6 +226,8 @@ def align_due_sentences(texts, cache_path, words):
         " ".join(two_transcripts), " ".join(three_transcripts), words
     )
     print(f'length check: {len(words)}/{len(" ".join(seg_transcripts).split())}')
+    if len(words) != len(" ".join(seg_transcripts).split()):
+        raise ValueError("transcripts and words not equal")
 
     result = get_or_cache(
         f"{cache_path}/split_stage_three.toml",
@@ -407,24 +238,18 @@ def align_due_sentences(texts, cache_path, words):
         result["seg_translates"],
     )
     if len(seg_transcripts) != len(seg_translates):
-        print("seg_transcripts and seg_translates not equal")
-        print("split_stage_three.toml", len(seg_transcripts), len(seg_translates))
-        sys.exit(1)
+        raise ValueError("seg_transcripts and seg_translates not equal")
 
     fourth_transcripts = copy.deepcopy(seg_transcripts)
-    # with open("words.toml", "w", encoding="utf-8") as f:
-    #     data = {
-    #         "words": words,
-    #         "a": " ".join(two_transcripts),
-    #         "b": " ".join(three_transcripts),
-    #     }
-    #     toml.dump(data, f)
+
     words = check_words_equal(
         " ".join(three_transcripts),
         " ".join(fourth_transcripts),
         words,
     )
     print(f'length check: {len(words)}/{len(" ".join(seg_transcripts).split())}')
+    if len(words) != len(" ".join(seg_transcripts).split()):
+        raise ValueError("transcripts and words not equal")
 
     result = get_or_cache(
         f"{cache_path}/clean_sentences.toml",
@@ -435,9 +260,7 @@ def align_due_sentences(texts, cache_path, words):
         result["seg_translates"],
     )
     if len(seg_transcripts) != len(seg_translates):
-        print("seg_transcripts and seg_translates not equal")
-        print("clean_sentences.toml", len(seg_transcripts), len(seg_translates))
-        sys.exit(1)
+        raise ValueError("seg_transcripts and seg_translates not equal")
 
     fifth_transcripts = copy.deepcopy(seg_transcripts)
     words = check_words_equal(
@@ -447,14 +270,8 @@ def align_due_sentences(texts, cache_path, words):
     )
     print(f'length check: {len(words)}/{len(" ".join(seg_transcripts).split())}')
 
-    # for idx, (a, b) in enumerate(zip(seg_transcripts, seg_translates)):
-    #     char_ratio = round(len(re.findall(r"[\u4e00-\u9fff]", b)) / len(a.split()), 3)
-    #     if char_ratio > 4:
-    #         print(
-    #             f"[{idx}] \n{a}\n{b}\n",
-    #             char_ratio,
-    #             "\n",
-    #         )
+    if len(words) != len(" ".join(seg_transcripts).split()):
+        raise ValueError("transcripts and words not equal")
 
     return seg_transcripts, seg_translates, words
 
@@ -500,9 +317,6 @@ def get_deliver_video(
     return delivery_videos
 
 
-comment_tasks = []
-
-
 def deliver_and_save_completion(items, credential=None):
     lost_items = copy.deepcopy(items)
     for item in items:
@@ -527,15 +341,15 @@ def deliver_and_save_completion(items, credential=None):
                 # await deliver(item, credential)
                 # 将id写入视频的meta data文件里，然后将当前时间，id，summary交给另一个线程去做置顶评论
                 if item["Summary"]:
-                    comment_tasks.append(
-                        {
-                            "time": datetime.now().timestamp(),
-                            "bvid": res_ids["bvid"],
-                            "aid": res_ids["aid"],
-                            "summary": item["Summary"],
-                        }
-                    )
-
+                    with thread_lock:  # 获取锁
+                        comment_tasks.append(
+                            {
+                                "time": datetime.now().timestamp(),
+                                "bvid": res_ids["bvid"],
+                                "aid": res_ids["aid"],
+                                "summary": item["Summary"],
+                            }
+                        )
                 break
 
             except Exception as e:
