@@ -5,4 +5,5 @@ src/env/env.py
 **/__pycache__/
 exprement/
 src/utils/model/
+src/utils/ultimatevocalremovergui/
 test.py
