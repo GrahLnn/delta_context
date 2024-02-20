@@ -11,6 +11,7 @@ from .status_utils import print_status
 from pydub import AudioSegment
 from pathlib import Path
 from tqdm import tqdm
+import math
 
 # def vad_clean(audio_path, output_path, output_name):
 #     # Load the Silero VAD model
@@ -221,7 +222,8 @@ def split_audio(file_path, output_path, segment_length=2400):
     audio = AudioSegment.from_file(file_path)
 
     # 计算分割的数量
-    num_segments = len(audio) // (segment_length * 1000)
+    num_segments = math.ceil(len(audio) / (segment_length * 1000))
+    # print(num_segments)
 
     for i in tqdm(range(num_segments), desc="Splitting audio into segments"):
         # 计算每个段落的开始和结束时间
@@ -241,6 +243,7 @@ def extract_vocal(audio_path, output_path, output_name):
     os.makedirs(f"{output_path}/split_seg", exist_ok=True)
 
     split_audio(audio_path, f"{output_path}/split_seg")
+    # sys.exit()
     folder = Path(f"{output_path}/split_seg")
     file_paths = list(folder.glob("*.wav"))
     file_paths.sort(key=lambda x: x.stat().st_ctime)

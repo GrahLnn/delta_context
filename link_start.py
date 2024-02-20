@@ -99,7 +99,7 @@ if os.path.exists("cache/comment_task.toml"):
         print("Error loading tasks:", e)
 
 
-atexit.register(save_tasklist, comment_tasks)
+atexit.register(save_tasklist)
 # 初始化队列
 
 
