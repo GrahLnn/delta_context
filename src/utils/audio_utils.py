@@ -4,7 +4,7 @@ import subprocess
 # from audio_separator import Separator
 from pyannote.audio import Pipeline
 from mdx23.inference import start
-from src.env.env import HUGGINGFACE_TOKEN
+from asset.env.env import HUGGINGFACE_TOKEN
 import sys
 from voicefixer import VoiceFixer
 from .status_utils import print_status
@@ -12,6 +12,8 @@ from pydub import AudioSegment
 from pathlib import Path
 from tqdm import tqdm
 import math
+import pickle
+from uvr.uvr_cli import infer
 
 # def vad_clean(audio_path, output_path, output_name):
 #     # Load the Silero VAD model
@@ -159,31 +161,10 @@ def vad_clean(audio_name, output_path, name):
             f"Speaker {speaker}'s final audio energy: {calculate_energy(final_audio):.6f}"
         )
 
-        #     # 保存音频文件
-        #     output_name = f"{folder}/{speaker}.wav"
-        #     sf.write(output_name, final_audio, sr)
-        # if not (audio_energy > energy_threshold and coverage_ratio > 0.1):
-        # if not (audio_energy > energy_threshold):
-        #     # 静默不符合条件的音频段
-        #     for segment in segments:
-        #         start_sample = int(segment["start"] * sr)
-        #         end_sample = int(segment["end"] * sr)
-        #         audio[start_sample:end_sample] = 0
     # del audio
     output_name = f"{folder}/processed_audio.wav"
     sf.write(output_name, final_audio, sr)
-    # sys.exit()
-    speakers = os.listdir(folder)
-    if len(speakers) == 1:
-        path_speakers = [f"{folder}/{speaker}" for speaker in speakers]
-        shutil.copy(path_speakers[0], f"{output_path}/{name}.wav")
-    elif len(speakers) > 1:
-        print(f"{audio_name} 多个说话人，该怎么办呢...怎么办呢...")
-        sys.exit()
-    else:
-        final_audio = np.zeros_like(audio)
-        output_name = f"{output_path}/{name}.wav"
-        sf.write(output_name, final_audio, sr)
+    shutil.copy(output_name, f"{output_path}/{name}.wav")
 
 
 def clean_vocal(audio_path, output_path):
@@ -238,49 +219,77 @@ def split_audio(file_path, output_path, segment_length=2400):
 
 
 def extract_vocal(audio_path, output_path, output_name):
-    os.makedirs(f"{output_path}/clean_vocal", exist_ok=True)
+    # os.makedirs(f"{output_path}/clean_vocal", exist_ok=True)
     os.makedirs(f"{output_path}/clean_speaker", exist_ok=True)
-    os.makedirs(f"{output_path}/split_seg", exist_ok=True)
+    # os.makedirs(f"{output_path}/split_seg", exist_ok=True)
 
-    split_audio(audio_path, f"{output_path}/split_seg")
-    # sys.exit()
-    folder = Path(f"{output_path}/split_seg")
-    file_paths = list(folder.glob("*.wav"))
-    file_paths.sort(key=lambda x: x.stat().st_ctime)
-    for file_path in tqdm(file_paths, desc="Extracting vocals"):
-        # 拼接完整的输入路径和输出路径
-        input_path = str(file_path)
-        # output_path = str(
-        #     file_path.with_suffix(".cleaned.mp3")
-        # )  # 例如: segment_1.cleaned.mp3
+    with open("asset/model/my_object.pkl", "rb") as f:
+        process_data = pickle.load(f)
 
-        # 调用 clean_vocal 函数
-        clean_vocal(input_path, f"{output_path}/clean_vocal")
+    # split_audio(audio_path, f"{output_path}/split_seg")
+    # # sys.exit()
+    # folder = Path(f"{output_path}/split_seg")
+    # file_paths = list(folder.glob("*.wav"))
+    # file_paths.sort(key=lambda x: x.stat().st_ctime)
+    # for file_path in tqdm(file_paths, desc="Extracting vocals"):
+    #     # 拼接完整的输入路径和输出路径
+    #     input_path = str(file_path)
+    #     print(input_path)
+    #     # output_path = str(
+    #     #     file_path.with_suffix(".cleaned.mp3")
+    #     # )  # 例如: segment_1.cleaned.mp3
 
-    folder = Path(f"{output_path}/clean_vocal")
-    file_paths = list(folder.glob("*.wav"))
-    file_paths.sort(key=lambda x: x.stat().st_ctime)
-    # 将所有音频文件合并成一个
-    combined_audio = AudioSegment.empty()
-    for file_path in file_paths:
-        combined_audio += AudioSegment.from_file(file_path)
+    #     # 调用 clean_vocal 函数
+    #     try:
+    #         # clean_vocal(input_path, f"{output_path}/clean_vocal")
+    #         infer(input_path, f"{output_path}/clean_vocal", "asset/model/MDX23C-8KFFT-InstVoc_HQ.ckpt", "asset/model/UVR-DeNoise-Lite.pth", "asset/model/UVR-DeEcho-DeReverb.pth", process_data)
+    #     except Exception as e:
+    #         print(e)
+    #         sys.exit(1)
 
-    # 保存合并后的音频文件
-    combined_audio.export(
-        f"{output_path}/clean_speaker/{output_name}.clean.wav", format="wav"
-    )
-    # 删除clean_vocal和split_seg文件夹
-    shutil.rmtree(f"{output_path}/clean_vocal")
-    shutil.rmtree(f"{output_path}/split_seg")
+    # folder = Path(f"{output_path}/clean_vocal")
+    # file_paths = list(folder.glob("*.wav"))
+    # file_paths.sort(key=lambda x: x.stat().st_ctime)
+    # # 将所有音频文件合并成一个
+    # combined_audio = AudioSegment.empty()
+    # for file_path in file_paths:
+    #     combined_audio += AudioSegment.from_file(file_path)
 
+    # # 保存合并后的音频文件
+    # combined_audio.export(
+    #     f"{output_path}/clean_speaker/{output_name}.clean.wav", format="wav"
+    # )
+    # # 删除clean_vocal和split_seg文件夹
+    # shutil.rmtree(f"{output_path}/clean_vocal")
+    # shutil.rmtree(f"{output_path}/split_seg")
     flag = [True]
-    # print_status(flag, "vad clean")
-    vad_clean(
-        f"{output_path}/clean_speaker/{output_name}.clean.wav",
-        output_path,
-        output_name,
-    )
-    flag[0] = False
+    desc = ["clean speaker"]
+
+    try:
+        print_status(flag, desc)
+        infer(
+            audio_path,
+            f"{output_path}/clean_speaker",
+            "asset/model/MDX23C-8KFFT-InstVoc_HQ.ckpt",
+            "asset/model/UVR-DeNoise-Lite.pth",
+            "asset/model/UVR-DeEcho-DeReverb.pth",
+            process_data,
+        )
+        desc[0] = "vad clean"
+        vad_clean(
+            f"{output_path}/clean_speaker/1_1_(Vocals).wav",
+            output_path,
+            output_name,
+        )
+        # shutil.copy(
+        #     f"{output_path}/clean_speaker/1_1_(Vocals).wav",
+        #     f"{output_path}/{output_name}.wav",
+        # )
+        flag[0] = False
+    except Exception as e:
+        flag[0] = False
+        raise e
+
     # shutil.move(
     #     f"{output_path}/clean_vocal/{output_name}.wav",
     #     audio_path,

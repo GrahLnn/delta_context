@@ -113,8 +113,11 @@ def check_words_len(re_seg_tc, transcript):
     return re_seg_tc_words, tc_words
 
 
+# 请将以下两个句子分割成多个独特的部分。句子应根据自然的语法或语义断点（如逗号、句号、连接词）进行分割。如果两个语言版本的分割部分数量不一致，请调整较长的部分以匹配较短的部分。这意味着，如果一个语言版本的句子被分割成更多的部分，您需要将这些额外的部分合并。在这个任务中，目标是保持原文的意义和结构，同时在适当的位置进行分割，以确保两种语言之间的对应关系清晰明确且意义一致。
+
+
 def split_by_LLM(transcript, translate, model="gpt-3.5-turbo-0125"):
-    prompt = f"""请将以下两个句子分割成多个独特的部分。句子应根据自然的语法或语义断点（如逗号、句号、连接词）进行分割。如果两个语言版本的分割部分数量不一致，请调整较长的部分以匹配较短的部分。这意味着，如果一个语言版本的句子被分割成更多的部分，您需要将这些额外的部分合并。在这个任务中，目标是保持原文的意义和结构，同时在适当的位置进行分割，以确保两种语言之间的对应关系清晰明确且意义一致。
+    prompt = f"""Please divide the following two sentences into multiple distinct parts. The division should be based on natural grammar or semantic breakpoints (such as commas, periods, conjunctions).
 
 
 给定句子：
@@ -177,7 +180,7 @@ def split_stage(transcripts, translates, desc):
             while True:
                 modified = False  # 标记是否进行了修改
                 while_count += 1
-                if while_count > 100:
+                if while_count > 50:
                     raise Exception("dead loop error")
 
                 for idx in range(len(seg_tc)):

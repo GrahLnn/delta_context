@@ -1,8 +1,8 @@
-import whisperx, torch, os, sys, re, string
+import torch, os, sys, re, string
 from pydub import AudioSegment
 
 
-from src.env.env import DEVICE, COMPUTE_TYPE
+from asset.env.env import DEVICE, COMPUTE_TYPE
 from src.utils.status_utils import print_status
 from src.utils.cache_utils import load_cache, save_cache
 from src.utils.LLM_utils import get_completion

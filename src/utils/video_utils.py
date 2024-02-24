@@ -4,7 +4,7 @@ from .LLM_utils import get_completion
 from .file_utils import sanitize_filename, url_type, save_to_toml
 from .cache_utils import load_cache, save_cache
 from .text_utils import strip_chinese_punctuation
-from src.env.env import ADD_TRANSITION, target_language
+from asset.env.env import ADD_TRANSITION, target_language
 from .image_utils import resize_img
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 from src.utils.status_utils import (

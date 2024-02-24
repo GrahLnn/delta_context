@@ -382,7 +382,7 @@ async def summarize(
             lang=lang,
         )
     if not chapters:
-        raise (500, f"summarize failed, no chapters")
+        raise Exception("summarize failed, no chapters")
     tasks = []
     for i, c in enumerate(chapters):
         start_time = c.start
@@ -405,7 +405,7 @@ async def summarize(
     res = await asyncio.gather(*tasks, return_exceptions=True)
     for r in res:
         if isinstance(r, Exception):
-            raise (f"summarize, but has exception, e={r}")
+            raise Exception(f"summarize, but has exception, e={r}")
 
     return chapters
 
@@ -446,6 +446,7 @@ async def translate(
         model=Model.GPT_3_5_TURBO,
         top_p=0.1,
         timeout=90,
+        json_output=True,
     )
 
     # logger.info(
@@ -459,8 +460,7 @@ async def translate(
 
     # Both fields must exist.
     if (not chapter) or (not summary):
-        raise (
-            500,
+        raise Exception(
             f"translate, but chapter or summary empty, lang={lang}",
         )  # nopep8.
 

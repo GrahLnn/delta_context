@@ -1,16 +1,15 @@
-import os, sys, whisperx, torch, re, copy
+import os, sys, torch, re, copy
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 from pydub import AudioSegment
 
-from src.env.env import DEVICE, BATCH_SIZE, COMPUTE_TYPE, LIMIT_LEN_TIME
-from .status_utils import print_status
+from asset.env.env import DEVICE, BATCH_SIZE, COMPUTE_TYPE, LIMIT_LEN_TIME
+from .status_utils import print_status, _CustomProgressBar
 from .LLM_utils import get_completion
 from .transcribe_auxiliary_utils import split_on_second_last_dot
 from tqdm import tqdm
 from whisper.tokenizer import get_tokenizer
 from transformers import GenerationConfig
 
-# import whisper_timestamped as whisper
 import whisper
 
 
@@ -36,96 +35,36 @@ def transcribe_with_ins_whisper(audio_file, timestamps=False):
     #     toml.dump(outputs, f)
 
 
-def transcribe_with_distil_whisper(audio_file, timestamps=False):
-    # tokenizer = get_tokenizer(
-    #     multilingual=True
-    # )  # 使用 multilingual=True 如果使用多语言模型
-    # number_tokens = [
-    #     i
-    #     for i in range(tokenizer.eot)
-    #     if all(c in "0123456789" for c in tokenizer.decode([i]).removeprefix(" "))
-    # ]
+def transcribe_with_whisper(audio_file, timestamps=False):
     flag = [True]
-    desc = ["Transcribing with distil whisper"]
+    desc = [""]
+    print_status(flag, desc=desc)
+    transcribe_module = sys.modules["whisper.transcribe"]
+    transcribe_module.tqdm.tqdm = _CustomProgressBar
     try:
-        print_status(flag, desc=desc)
+        desc[0] = "load model"
+        model = whisper.load_model("large-v3")
+        flag[0] = False
+        # model = whisper.load_model("distil-whisper/distil-large-v2")
+        # print("transcribe start")
 
-        # device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        # torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-
-        # model_id = "distil-whisper/distil-large-v2"
-        # # model_id = "openai/whisper-large-v3"
-        # generation_config = GenerationConfig.from_pretrained(model_id)
-        # generation_config.suppress_tokens += number_tokens
-
-        # model = AutoModelForSpeechSeq2Seq.from_pretrained(
-        #     model_id,
-        #     torch_dtype=torch_dtype,
-        #     low_cpu_mem_usage=True,
-        #     use_safetensors=True,
-        #     # use_flash_attention_2=True,
-        # )
-        # # model = model.to_bettertransformer()
-        # model.to(device)
-
-        # processor = AutoProcessor.from_pretrained(model_id)
-
-        # pipe = pipeline(
-        #     "automatic-speech-recognition",
-        #     model=model,
-        #     tokenizer=processor.tokenizer,
-        #     feature_extractor=processor.feature_extractor,
-        #     max_new_tokens=128,
-        #     chunk_length_s=15,
-        #     batch_size=16,
-        #     # batch_size=1,
-        #     torch_dtype=torch_dtype,
-        #     device=device,
-        #     generate_kwargs={"task": "transcribe", "language": None},
-        # )
-
-        # result = pipe(
-        #     audio_file,
-        #     return_timestamps=timestamps,
-        #     suppress_tokens=[-1] + number_tokens,
-        # )
-
-        # pipe = pipeline(
-        #     "automatic-speech-recognition",
-        #     model="distil-whisper/distil-large-v2",
-        #     torch_dtype=torch.float16,
-        #     device="cuda",  # or mps for Mac devices
-        #     model_kwargs={"use_flash_attention_2": False},
-        # )
-
-        # result = pipe(
-        #     audio_file,
-        #     chunk_length_s=30,
-        #     batch_size=1,
-        #     return_timestamps="word",
-        #     generate_kwargs={"task": "transcribe", "language": None},
-        # )
-        tokenizer = get_tokenizer(
-            multilingual=False
-        )  # use multilingual=True if using multilingual model
-        # number_tokens = [
-        #     i
-        #     for i in range(tokenizer.eot)
-        #     if all(c in "0123456789" for c in tokenizer.decode([i]).removeprefix(" "))
-        # ]
-
-        model = whisper.load_model("large-v2")
         result = model.transcribe(
             audio_file,
             # suppress_tokens=[-1] + number_tokens,
             word_timestamps=True,
             compression_ratio_threshold=1.5,
+            fp16=False,
+            verbose=None,
             # temperature=0,
         )
+
         new_result = {"text": "", "chunks": [], "language": ""}
         new_result["text"] = result["text"].strip()
         new_result["language"] = result["language"]
         new_result["chunks"] = result["segments"]
+
+        if new_result["language"] != "en":
+            raise ValueError("Language is not English")
         for idx, chunk in enumerate(new_result["chunks"]):
             new_result["chunks"][idx]["timestamp"] = [
                 round(float(chunk["start"]), 2),
@@ -140,27 +79,160 @@ def transcribe_with_distil_whisper(audio_file, timestamps=False):
                 if word["word"].startswith(" "):
                     new_words.append(word)
                 else:
-                    new_words[-1]["word"] += word["word"]
-                    new_words[-1]["end"] = word["end"]
+                    try:
+                        new_words[-1]["word"] += word["word"]
+                        new_words[-1]["end"] = word["end"]
+                    except IndexError:
+                        new_words.append(word)
             new_result["chunks"][idx]["words"] = new_words
-
-        # for idx, chunk in enumerate(result["chunks"]):
-        #     result["chunks"][idx]["timestamp"] = list(chunk["timestamp"])
-
-        # if None in result["chunks"][-1]["timestamp"]:
-        #     # 计算音频总长度然后赋值给最后一个时间戳
-        #     audio = AudioSegment.from_file(audio_file)
-        #     audio_length = audio.duration_seconds
-        #     result["chunks"][-1]["timestamp"][1] = audio_length
-
-        flag[0] = False
-        print()
 
         return new_result
     except Exception as e:
         desc[0] = "Transcribe failed"
         flag[0] = False
         raise e
+
+
+# def transcribe_with_distil_whisper(audio_file, timestamps=False):
+#     # tokenizer = get_tokenizer(
+#     #     multilingual=True
+#     # )  # 使用 multilingual=True 如果使用多语言模型
+#     # number_tokens = [
+#     #     i
+#     #     for i in range(tokenizer.eot)
+#     #     if all(c in "0123456789" for c in tokenizer.decode([i]).removeprefix(" "))
+#     # ]
+#     flag = [True]
+#     desc = [""]
+#     print_status(flag, desc=desc)
+#     transcribe_module = sys.modules['whisper.transcribe']
+#     transcribe_module.tqdm.tqdm = _CustomProgressBar
+#     try:
+
+
+#         # device = "cuda:0" if torch.cuda.is_available() else "cpu"
+#         # torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+#         # model_id = "distil-whisper/distil-large-v2"
+#         # # model_id = "openai/whisper-large-v3"
+#         # generation_config = GenerationConfig.from_pretrained(model_id)
+#         # generation_config.suppress_tokens += number_tokens
+
+#         # model = AutoModelForSpeechSeq2Seq.from_pretrained(
+#         #     model_id,
+#         #     torch_dtype=torch_dtype,
+#         #     low_cpu_mem_usage=True,
+#         #     use_safetensors=True,
+#         #     # use_flash_attention_2=True,
+#         # )
+#         # # model = model.to_bettertransformer()
+#         # model.to(device)
+
+#         # processor = AutoProcessor.from_pretrained(model_id)
+
+#         # pipe = pipeline(
+#         #     "automatic-speech-recognition",
+#         #     model=model,
+#         #     tokenizer=processor.tokenizer,
+#         #     feature_extractor=processor.feature_extractor,
+#         #     max_new_tokens=128,
+#         #     chunk_length_s=15,
+#         #     batch_size=16,
+#         #     # batch_size=1,
+#         #     torch_dtype=torch_dtype,
+#         #     device=device,
+#         #     generate_kwargs={"task": "transcribe", "language": None},
+#         # )
+
+#         # result = pipe(
+#         #     audio_file,
+#         #     return_timestamps=timestamps,
+#         #     suppress_tokens=[-1] + number_tokens,
+#         # )
+
+#         # pipe = pipeline(
+#         #     "automatic-speech-recognition",
+#         #     model="distil-whisper/distil-large-v2",
+#         #     torch_dtype=torch.float16,
+#         #     device="cuda",  # or mps for Mac devices
+#         #     model_kwargs={"use_flash_attention_2": False},
+#         # )
+
+#         # result = pipe(
+#         #     audio_file,
+#         #     chunk_length_s=30,
+#         #     batch_size=1,
+#         #     return_timestamps="word",
+#         #     generate_kwargs={"task": "transcribe", "language": None},
+#         # )
+#         # tokenizer = get_tokenizer(
+#         #     multilingual=False
+#         # )  # use multilingual=True if using multilingual model
+#         # number_tokens = [
+#         #     i
+#         #     for i in range(tokenizer.eot)
+#         #     if all(c in "0123456789" for c in tokenizer.decode([i]).removeprefix(" "))
+#         # ]
+#         # print("load model")
+
+
+#         desc[0] = "load model"
+#         model = whisper.load_model("large-v2")
+#         flag[0] = False
+#         # model = whisper.load_model("distil-whisper/distil-large-v2")
+#         # print("transcribe start")
+
+#         result = model.transcribe(
+#             audio_file,
+#             # suppress_tokens=[-1] + number_tokens,
+#             word_timestamps=True,
+#             compression_ratio_threshold=1.5,
+#             fp16=False, verbose=None
+#             # temperature=0,
+#         )
+
+
+#         # print(result)
+#         new_result = {"text": "", "chunks": [], "language": ""}
+#         new_result["text"] = result["text"].strip()
+#         new_result["language"] = result["language"]
+#         new_result["chunks"] = result["segments"]
+
+#         if new_result["language"] != "en":
+#             return new_result
+#         for idx, chunk in enumerate(new_result["chunks"]):
+#             new_result["chunks"][idx]["timestamp"] = [
+#                 round(float(chunk["start"]), 2),
+#                 round(float(chunk["end"]), 2),
+#             ]
+#             for word in chunk["words"]:
+#                 word["start"] = str(round(float(word["start"]), 2))
+#                 word["end"] = str(round(float(word["end"]), 2))
+
+#             new_words = []
+#             for word in chunk["words"]:
+#                 if word["word"].startswith(" "):
+#                     new_words.append(word)
+#                 else:
+#                     new_words[-1]["word"] += word["word"]
+#                     new_words[-1]["end"] = word["end"]
+#             new_result["chunks"][idx]["words"] = new_words
+
+#         # for idx, chunk in enumerate(result["chunks"]):
+#         #     result["chunks"][idx]["timestamp"] = list(chunk["timestamp"])
+
+#         # if None in result["chunks"][-1]["timestamp"]:
+#         #     # 计算音频总长度然后赋值给最后一个时间戳
+#         #     audio = AudioSegment.from_file(audio_file)
+#         #     audio_length = audio.duration_seconds
+#         #     result["chunks"][-1]["timestamp"][1] = audio_length
+
+
+#         return new_result
+#     except Exception as e:
+#         desc[0] = "Transcribe failed"
+#         flag[0] = False
+#         raise e
 
 
 def first_proofread(sentences):

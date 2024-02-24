@@ -2,7 +2,7 @@ import time, os, sys, json, tiktoken, threading, functools, traceback, requests
 from .net_utils import checker
 
 # from openai import OpenAI
-from src.env.env import OPENAI_API_KEY
+from asset.env.env import OPENAI_API_KEY
 
 # from dotenv import load_dotenv
 # from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -57,7 +57,7 @@ def timeout(seconds):
     return decorator
 
 
-# from src.env.env import OPENAI_API_KEY
+# from asset.env.env import OPENAI_API_KEY
 
 # openai = OpenAI(api_key=OPENAI_API_KEY)
 

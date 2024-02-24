@@ -1,5 +1,5 @@
 import time, datetime, threading, re
-
+import tqdm
 
 def status_circle(flag, message):
     if isinstance(message, str):
@@ -92,3 +92,22 @@ def progress_bar_handler(progress, spinner_active, task_name=""):
     print(
         f"\r{task_name} {create_progress_bar(current_progress/100)}  {current_progress:.2f}%",
     )
+
+
+class _CustomProgressBar(tqdm.tqdm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._current = self.n  # Set the initial value
+        
+    def update(self, n):
+        super().update(n)
+        self._current += n
+        
+        # 计算当前的进度比例
+        progress_ratio = self._current / self.total
+        # 使用 create_progress_bar 函数生成进度条
+        progress_bar = create_progress_bar(progress_ratio)
+
+        # 打印进度条
+        
+        print("Transcribing: " + progress_bar +" " + str(self._current)+"/" +str(self.total)+f"|{round(progress_ratio * 100, 2)}%", end=" \r", flush=True)

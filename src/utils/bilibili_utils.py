@@ -14,6 +14,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from .captcha_utils import predict
 import json
 import base64
+from .cache_utils import load_cache, save_cache
 
 
 def get_location(element, browser):
@@ -141,12 +142,14 @@ async def deliver(video, credential):
         raise e
 
 
-def upload(path_to_file, img_path, tags, desc, title, season):
+def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
     # 创建一个 WebDriver 实例，指定使用的浏览器
     path_to_file = os.path.abspath(path_to_file)
     img_path = os.path.abspath(img_path)
 
-    chrome_binary_path = os.path.expanduser("~/chrome-linux64/chrome")
+    chrome_binary_path = os.path.expanduser(
+        "~/delta_context/asset/chrome-linux64/chrome"
+    )
     options = Options()
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     options.binary_location = chrome_binary_path
@@ -209,7 +212,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
         "//button[@class='bcc-button bcc-button--primary large']//span[contains(text(), '完成')]",
     ).click()
     time.sleep(0.25)
-    driver.save_screenshot("1.png")
+
     wait.until(
         EC.presence_of_element_located(
             (
@@ -363,7 +366,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
             driver.find_element(
                 By.XPATH, "//button[.//span[text()='创建并加入']]"
             ).click()
-        driver.save_screenshot("2.png")
+
         wait.until(
             EC.presence_of_element_located(
                 (
@@ -414,7 +417,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
             )
         )
     )
-    driver.save_screenshot("3.png")
+
     WebDriverWait(driver, 600).until(
         EC.presence_of_element_located(
             (
@@ -430,7 +433,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
     # for entry in driver.get_log("browser"):
     #     print("browser", entry)
     time.sleep(1)
-    driver.save_screenshot("4.png")
+
     try:
         wait.until(
             EC.presence_of_element_located(
@@ -481,7 +484,7 @@ def upload(path_to_file, img_path, tags, desc, title, season):
                 -(X + x * lan_x), -(Y + y * lan_y)
             ).perform()  # 将鼠标位置恢复到移动前
             time.sleep(0.5)
-            driver.save_screenshot(f"click{i}.png")
+
         xpath = '//*[@class="geetest_commit_tip"]'
         wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
 
@@ -496,7 +499,10 @@ def upload(path_to_file, img_path, tags, desc, title, season):
                 )
             )
         )
-    driver.save_screenshot("5.png")
+    info = load_cache(metadatapath)
+    info["is_delivered"] = True
+    save_cache(info, metadatapath)
+
     logs = driver.get_log("performance")
     bvid_msg = None
     for log in logs:
@@ -509,7 +515,9 @@ def upload(path_to_file, img_path, tags, desc, title, season):
     if not bvid_msg:
         print(logs)
         raise Exception("bvid not found")
-    print(bvid_msg)
+    # print(bvid_msg)
+    with open("bvid_msg_log.txt", "w") as f:
+        f.write(str(log))
     reg = r"\|\{.*?\}\|"
     matches = re.findall(reg, bvid_msg)[0]
     print(matches)

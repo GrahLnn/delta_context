@@ -1,5 +1,4 @@
 import os, toml, tomllib
-from .video_comment import comment_tasks
 
 
 def save_cache(data, filename):
@@ -34,6 +33,8 @@ def get_or_cache(cache_path, compute_fn):
 
 def save_tasklist():
     # 直接访问全局变量
+    from .video_comment import comment_tasks
+
     if not comment_tasks:
         # 如果列表为空，删除文件（如果存在）
         try:
@@ -44,7 +45,7 @@ def save_tasklist():
         return
 
     try:
-        with open("cache/comment_task.toml", "wb") as toml_file:
+        with open("cache/comment_task.toml", "w") as toml_file:
             toml.dump({"comment_task": comment_tasks}, toml_file)
     except Exception as e:
         print("Error saving tasks:", e)

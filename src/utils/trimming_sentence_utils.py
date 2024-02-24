@@ -3,7 +3,7 @@ from .LLM_utils import get_completion, gpt2pair
 from tqdm import tqdm
 from itertools import zip_longest
 
-from src.env.env import target_language
+from asset.env.env import target_language
 from .text_utils import (
     replace_comma_in_brackets,
     back_to_comma,

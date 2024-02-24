@@ -1,8 +1,8 @@
 import os, re, json, sys
 from typing import Callable, Optional, TextIO
+import datetime
 
-
-from src.env.env import ADD_TRANSITION, target_language, ASS_STYLE
+from asset.env.env import ADD_TRANSITION, target_language, ASS_STYLE
 
 languages_dirc = {
     "Chinese": "zh",
@@ -151,9 +151,11 @@ class SubtitlesWriter(ResultWriter):
 
                             yield start, end, prefix + " ".join(
                                 [
-                                    re.sub(r"^(\s*)(.*)$", r"\1<u>\2</u>", word)
-                                    if j == i
-                                    else word
+                                    (
+                                        re.sub(r"^(\s*)(.*)$", r"\1<u>\2</u>", word)
+                                        if j == i
+                                        else word
+                                    )
                                     for j, word in enumerate(all_words)
                                 ]
                             )
@@ -206,6 +208,15 @@ class WriteSRT4T(SubtitlesWriter):
                 segment.get("translation", "").strip().replace("-->", "->")
             )
             yield segment_start, segment_end, segment_translation
+
+
+def calculate_duration(self, start: str, end: str) -> int:
+    # 将时间字符串转换为毫秒
+    fmt = "%H:%M:%S.%f"
+    start_time = datetime.datetime.strptime(start, fmt)
+    end_time = datetime.datetime.strptime(end, fmt)
+    duration = (end_time - start_time).total_seconds() * 1000
+    return int(duration)
 
 
 class WriteVTT(SubtitlesWriter):
@@ -362,9 +373,6 @@ class WriteASS4T(ResultWriter):
         file.write(
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         )
-        # file.write(
-        #     f"Style: 仓耳今楷,仓耳今楷03 W04,18,&H00F7C34F,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0.9,1,2,5,5,10,1\n"
-        # )
         file.write(f"Style: {ASS_STYLE}\n")
         file.write("\n")
 
@@ -378,7 +386,22 @@ class WriteASS4T(ResultWriter):
             start_time = self.format_timestamp(segment["start"])
             end_time = self.format_timestamp(segment["end"])
             text = segment["translation"]
-            file.write(f"Dialogue: 0,{start_time},{end_time},仓耳今楷,,0,0,0,,{text}\n")
+
+            # 计算渐变时间（30毫秒）
+            fade_time = 30
+
+            # 计算持续时间（毫秒）
+            duration = self.calculate_duration(start_time, end_time)
+
+            # 如果字幕持续时间小于60毫秒（两次渐变的总时间），则调整渐变时间
+            if duration < 2 * fade_time:
+                fade_time = duration // 2
+
+            # 添加透明度渐变代码
+            fade_effect = f"{{\\fad({fade_time},{fade_time})}}"
+            file.write(
+                f"Dialogue: 0,{start_time},{end_time},仓耳今楷,,0,0,0,,{fade_effect}{text}\n"
+            )
 
     def format_timestamp(self, seconds: float):
         # 转换时间格式为ASS文件所需的"hh:mm:ss.cc"形式

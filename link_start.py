@@ -21,12 +21,11 @@ from src.main_auxiliary_utils import (
     download_extract,
     waiting_thread,
     deliver_and_save_completion,
-    comment_tasks,
 )
-from src.env.env import LIMIT_LEN_TIME
+from asset.env.env import LIMIT_LEN_TIME
 from src.utils.align_utils import align_transcripts
 from src.utils.examine_utils import rebuild_result_sentences
-from src.utils.cache_utils import get_or_cache, load_cache, save_cache
+from src.utils.cache_utils import get_or_cache, load_cache, save_cache, save_tasklist
 from src.utils.net_utils import checker
 from pydub import AudioSegment
 
@@ -42,21 +41,25 @@ import datetime
 from redlines import Redlines
 import json
 from src.utils.summary_utils import get_timed_texts, get_summary_text
-from src.utils.video_comment import daemon_thread
+
 import httpx
 import atexit
-from src.utils.cache_utils import save_tasklist
+
 from queue import Queue
+from uvr.uvr_cli import ModelData
+from src.utils.video_comment import comment_tasks, comment_summary_to_video
 
 # from bilibili_api import settings
+
 
 # settings.proxy = "https://api.mahiron.moe"
 checker.start()
 limit = None
 addition = [
     # {
-    #     "url": "https://www.youtube.com/watch?v=jrVQXHmxH7Y",
+    #     "url": "https://www.youtube.com/watch?v=zduSFxRajkE",
     #     "uploader": "@TheRoyalInstitution",
+    #     "ignoire_vocal_clean": True,
     # }
 ]
 channel_filter = []
@@ -73,12 +76,15 @@ video_datas = (
     if playlist_filter
     else video_datas
 )
-capta_server = "http://127.0.0.1:5000/detect"
+
+# video_datas[0]["ignoire_vocal_clean"] = True
+
 try:
-    httpx.post(capta_server)
+    httpx.post("http://127.0.0.1:5000/detect")
 except Exception as e:
-    print(e)
-    print("capta server not start")
+    print(f"{e} capta server not start")
+    sys.exit()
+
 
 # sys.exit()
 # thread = threading.Thread(target=manage_video_urls)
@@ -97,16 +103,14 @@ if os.path.exists("cache/comment_task.toml"):
         comment_tasks.extend(pre_comment_task)
     except Exception as e:
         print("Error loading tasks:", e)
-
+        sys.exit()
 
 atexit.register(save_tasklist)
 # 初始化队列
 
-
-daemon = threading.Thread(target=daemon_thread)
+daemon = threading.Thread(target=comment_summary_to_video)
 daemon.setDaemon(True)
 daemon.start()
-
 
 if os.path.exists("cache/delivery_videos.toml"):
     with open("cache/delivery_videos.toml", "rb") as toml_file:
@@ -151,33 +155,41 @@ for item in video_datas:
 
     info_path = f"{cpath}/{fid}.toml"
     info = load_cache(f"{cpath}/{fid}.toml")
-
-    process_task(
-        info,
-        "vocal_is_clean",
-        info_path,
-        clean_vocal,
-        afile,
-        fpath,
-        fid,
-    )
-    audio, sr = librosa.load(afile, sr=None)
-    energy_threshold = 0.0005
-    energy = calculate_energy(audio)
-    print(f"Audio energy: {energy:.6f}")
+    if not item.get("ignoire_vocal_clean", False):
+        process_task(
+            info,
+            "vocal_is_clean",
+            info_path,
+            clean_vocal,
+            afile,
+            fpath,
+            fid,
+        )
+    # audio, sr = librosa.load(afile, sr=None)
+    # energy_threshold = 0.0005
+    # energy = calculate_energy(audio)
+    # print(f"Audio energy: {energy:.6f}")
     # sys.exit()
     # result = (
     #     get_transcribe(afile, cpath, add_timestamps=True)
     #     if energy > energy_threshold
     #     else {"text": ""}
     # )
+    # afile = "video/sample1.wav"
+    # cpath = "./"
+    # print(afile)
+
     result = get_transcribe(afile, cpath, add_timestamps=True)
+    print()
+    # sys.exit()
     words = []
     for chunk in result["chunks"]:
         words.extend(chunk["words"])
 
+    chunk_text = [w["text"] for w in result["chunks"]]
+    empty = [w for w in chunk_text if w == ""]
     # sys.exit()
-    if len(result["text"].split()) < 50:
+    if len(result["text"].split()) < 50 or len(empty) > 20:
         videos = get_deliver_video(
             cpath, fid, fpath, fname, uploader, item.get("url"), False
         )

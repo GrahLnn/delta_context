@@ -9,7 +9,7 @@ from .text_utils import (
 )
 from .list_utils import flatten_list
 from difflib import SequenceMatcher
-from src.env.env import target_language
+from asset.env.env import target_language
 from tqdm import tqdm
 
 

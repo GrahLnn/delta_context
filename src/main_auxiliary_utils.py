@@ -1,6 +1,6 @@
 import toml, os, spacy, tomllib, time, asyncio, copy, sys
 from src.utils.transcribe_utils import (
-    transcribe_with_distil_whisper,
+    transcribe_with_whisper,
     merge_if_not_period,
     find_closest_stamps,
 )
@@ -42,6 +42,7 @@ import re
 import string
 from bilibili_api import sync
 from src.utils.video_comment import comment_tasks, thread_lock
+import httpx
 
 
 def download_extract(item):
@@ -80,7 +81,7 @@ def clean_vocal(afile, output_path, output_name):
 def get_transcribe(audio_file, cache_path, add_timestamps=False):
     result = get_or_cache(
         f"{cache_path}/transcribe_result.toml",
-        lambda: transcribe_with_distil_whisper(audio_file, add_timestamps),
+        lambda: transcribe_with_whisper(audio_file, add_timestamps),
     )
 
     return result
@@ -325,31 +326,36 @@ def deliver_and_save_completion(items, credential=None):
 
         while retry_count < max_retries:
             try:
-                res_ids = upload(
-                    item["Video"],
-                    item["Thumbnail"],
-                    item["Tag"],
-                    item["Description"],
-                    item["Title"],
-                    item["Season"],
-                )
                 info = load_cache(item["MetaDataPath"])
-                info["aid"] = res_ids["aid"]
-                info["bvid"] = res_ids["bvid"]
-                info["summary"] = item["Summary"]
-                save_cache(info, item["MetaDataPath"])
+                if not info.get("is_delivered", False):
+                    res_ids = upload(
+                        item["Video"],
+                        item["Thumbnail"],
+                        item["Tag"],
+                        item["Description"],
+                        item["Title"],
+                        item["Season"],
+                        item["MetaDataPath"],
+                    )
+                    # upload 会修改 info，所以需要重新加载
+                    info = load_cache(item["MetaDataPath"])
+                    info["aid"] = res_ids["aid"]
+                    info["bvid"] = res_ids["bvid"]
+                    info["summary"] = item["Summary"]
+                    save_cache(info, item["MetaDataPath"])
                 # await deliver(item, credential)
                 # 将id写入视频的meta data文件里，然后将当前时间，id，summary交给另一个线程去做置顶评论
-                if item["Summary"]:
-                    with thread_lock:  # 获取锁
-                        comment_tasks.append(
-                            {
-                                "time": datetime.now().timestamp(),
-                                "bvid": res_ids["bvid"],
-                                "aid": res_ids["aid"],
-                                "summary": item["Summary"],
-                            }
-                        )
+                if item["summary"] and info.get("aid", False):
+
+                    task = {
+                        "time": datetime.now().timestamp(),
+                        "bvid": info["bvid"],
+                        "aid": info["aid"],
+                        "summary": info["summary"],
+                    }
+                    with thread_lock:
+                        comment_tasks.append(task)
+
                 break
 
             except Exception as e:

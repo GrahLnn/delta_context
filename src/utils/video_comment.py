@@ -57,7 +57,7 @@ def send_summary(summary, oid):
         rpid = sync(send_comment(s, oid=oid, root=rpids[0] if idx != 0 else None))
         rpids.append(rpid)
         if idx == 0:
-            time.sleep(2)
+            time.sleep(5)
             acomment = comment.Comment(
                 oid, comment.CommentResourceType.VIDEO, rpid, credential=credential
             )
@@ -67,38 +67,59 @@ def send_summary(summary, oid):
 
 async def video_info(bvid):
     v = video.Video(bvid=bvid, credential=credential)
-    info = await v.get_info()
+    await v.get_info()
     # print(info)
 
 
-def daemon_thread():
+def comment_summary_to_video():
     while True:
-        # 使用线程锁保护对全局列表的访问
-        with thread_lock:
-            # 检查任务列表是否为空
-            if not comment_tasks:
-                continue
+        task = None
 
-            # 获取任务
-            task = comment_tasks.pop(0)
+        with thread_lock:
+            if comment_tasks:
+                task = comment_tasks.pop(0)
+
+        if task is None:
+            time.sleep(100)  # 等待一段时间
+            continue
 
         try:
-            # 同步视频信息
-            sync(video_info(task["bvid"]))
-
-            # 检查是否满足发送条件
             current_time = datetime.now().timestamp()
             if current_time - task.get("time", current_time) < 600:
-                # 如果不满足条件，稍后重试
                 print("Waiting to send summary", task["bvid"])
+
                 with thread_lock:
                     comment_tasks.append(task)  # 将任务重新放回列表
-            else:
-                # 满足条件，发送摘要
+                time.sleep(600)
+                continue  # 跳过当前循环的剩余部分
+
+            # 检查是否可以同步视频信息
+            try:
+                sync(video_info(task["bvid"]))
+            except Exception as sync_error:
+                print("Error syncing video info", task["bvid"], sync_error)
+                # 更新任务时间并重新放回列表
+                task["time"] = datetime.now().timestamp()
+                with thread_lock:
+                    comment_tasks.append(task)
+                continue  # 跳过当前循环的剩余部分
+
+            # 发送摘要
+            try:
                 send_summary(task["summary"], task["aid"])
+                print("----------------------")
                 print("Send summary comment success", task["bvid"])
+                print("----------------------")
+            except Exception as send_error:
+                print("Error sending summary", task["bvid"], send_error)
+                # 更新任务时间并重新放回列表
+                task["time"] = datetime.now().timestamp()
+                with thread_lock:
+                    comment_tasks.append(task)
 
         except Exception as e:
             print("Error processing task", task["bvid"], "Error:", e)
+            # 更新任务时间并重新放回列表
+            task["time"] = datetime.now().timestamp()
             with thread_lock:
-                comment_tasks.append(task)  # 出错时，将任务重新放回列表
+                comment_tasks.append(task)
