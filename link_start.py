@@ -48,18 +48,22 @@ import atexit
 from queue import Queue
 from uvr.uvr_cli import ModelData
 from src.utils.video_comment import comment_tasks, comment_summary_to_video
+from src.utils.deliver_utils import interval_deliver
+from src.utils.status_utils import sleep_until_morning
 
 # from bilibili_api import settings
 
 
 # settings.proxy = "https://api.mahiron.moe"
-checker.start()
+try:
+    checker.can_execute_request()
+except Exception:
+    checker.start()
 limit = None
 addition = [
     # {
-    #     "url": "https://www.youtube.com/watch?v=zduSFxRajkE",
-    #     "uploader": "@TheRoyalInstitution",
-    #     "ignoire_vocal_clean": True,
+    #     "url": "https://www.youtube.com/watch?v=5j05RWh1ypk",
+    #     "uploader": "@CppCon",
     # }
 ]
 channel_filter = []
@@ -77,7 +81,12 @@ video_datas = (
     else video_datas
 )
 
-# video_datas[0]["ignoire_vocal_clean"] = True
+# video_datas = [
+#     {
+#         "url": "https://www.youtube.com/watch?v=5j05RWh1ypk",
+#         "uploader": "@CppCon",
+#     }
+# ]
 
 try:
     httpx.post("http://127.0.0.1:5000/detect")
@@ -100,7 +109,10 @@ if os.path.exists("cache/comment_task.toml"):
     try:
         with open("cache/comment_task.toml", "rb") as toml_file:
             pre_comment_task = tomllib.load(toml_file)["comment_task"]
+
+        pre_comment_task = list(set(pre_comment_task))
         comment_tasks.extend(pre_comment_task)
+
     except Exception as e:
         print("Error loading tasks:", e)
         sys.exit()
@@ -127,8 +139,9 @@ if os.path.exists("cache/delivery_videos.toml"):
 # TODO 实现全局一致的名词翻译，多说话人盲源分离
 # interval_deliver()
 
-
+upload_count = 0
 for item in video_datas:
+    sleep_until_morning()
     start_time = datetime.datetime.now()
     elapsed_time = datetime.timedelta(seconds=0)
     print(item)
@@ -180,16 +193,17 @@ for item in video_datas:
     # print(afile)
 
     result = get_transcribe(afile, cpath, add_timestamps=True)
-    print()
+    # print()
     # sys.exit()
     words = []
     for chunk in result["chunks"]:
         words.extend(chunk["words"])
 
-    chunk_text = [w["text"] for w in result["chunks"]]
-    empty = [w for w in chunk_text if w == ""]
+    # chunk_text = [w["text"] for w in result["chunks"]]
+    # empty = [w for w in chunk_text if w == ""]
+    words_set = list(set(result["text"].split()))
     # sys.exit()
-    if len(result["text"].split()) < 50 or len(empty) > 20:
+    if len(result["text"].split()) < 50 or len(words_set) < 20:
         videos = get_deliver_video(
             cpath, fid, fpath, fname, uploader, item.get("url"), False
         )
@@ -426,4 +440,6 @@ for item in video_datas:
         f"Done processing `{fid}` from `{item.get('uploader')}`, a {round(audio_length_minutes,2)} minutes video, take {formatted_time} minute and ${round(cost_calculator.get_total_cost(),3)} API call to process."
     )
     cost_calculator.reset_total_cost()
-    # interval_deliver()
+    if upload_count % 5 == 0 and upload_count != 0:
+        interval_deliver()
+    upload_count += 1

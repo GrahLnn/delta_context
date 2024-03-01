@@ -401,8 +401,22 @@ async def summarize(
                 lang=lang,
             )
         )
+    max_retries = 3  # 设置最大重试次数
+    retry_interval = 60  # 设置重试间隔（秒）
 
-    res = await asyncio.gather(*tasks, return_exceptions=True)
+    async def retry_task(task, retry_count=0):
+        try:
+            return await task
+        except Exception as e:
+            if retry_count < max_retries:
+                await asyncio.sleep(retry_interval)  # 等待一段时间再重试
+                return await retry_task(task, retry_count + 1)
+            else:
+                raise e
+
+    res = await asyncio.gather(
+        *(retry_task(task) for task in tasks), return_exceptions=True
+    )
     for r in res:
         if isinstance(r, Exception):
             raise Exception(f"summarize, but has exception, e={r}")

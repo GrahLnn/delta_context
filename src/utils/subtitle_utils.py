@@ -210,15 +210,6 @@ class WriteSRT4T(SubtitlesWriter):
             yield segment_start, segment_end, segment_translation
 
 
-def calculate_duration(self, start: str, end: str) -> int:
-    # 将时间字符串转换为毫秒
-    fmt = "%H:%M:%S.%f"
-    start_time = datetime.datetime.strptime(start, fmt)
-    end_time = datetime.datetime.strptime(end, fmt)
-    duration = (end_time - start_time).total_seconds() * 1000
-    return int(duration)
-
-
 class WriteVTT(SubtitlesWriter):
     extension: str = "vtt"
     always_include_hours: bool = False
@@ -359,6 +350,14 @@ class WriteASS4T(ResultWriter):
         )  # 在这里修改输出文件名
         with open(output_path, "w", encoding="utf-8") as f:
             self.write_result(result, file=f, options=options)
+
+    def calculate_duration(self, start: str, end: str) -> int:
+        # 将时间字符串转换为毫秒
+        fmt = "%H:%M:%S.%f"
+        start_time = datetime.datetime.strptime(start, fmt)
+        end_time = datetime.datetime.strptime(end, fmt)
+        duration = (end_time - start_time).total_seconds() * 1000
+        return int(duration)
 
     def write_result(self, result: dict, file: TextIO, options: dict):
         # 写入ASS文件头部信息

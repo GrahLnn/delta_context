@@ -8,10 +8,18 @@ from .utils.status_utils import countdown
 
 
 def extract_url_info(url):
+    ydl_opts = {
+        "quiet": True,
+        # "extract_flat": True,
+        # "force_generic_extractor": True,
+        "logger": loggerOutputs,
+        # "no_warnings": True,
+        # "ignoreerrors": True,  # 忽略错误
+    }
 
     while True:
         try:
-            with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 result = ydl.extract_info(url, download=False)
                 return [url, int(result["upload_date"])]
 
@@ -25,7 +33,7 @@ def extract_url_info(url):
 
 def process_urls(urls):
     urls_date = []
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         # 提交任务到线程池
         future_to_url = {executor.submit(extract_url_info, url): url for url in urls}
 
@@ -42,6 +50,20 @@ def process_urls(urls):
     return urls_date
 
 
+class loggerOutputs:
+    def error(msg):
+        # print("Captured Error: " + msg)
+        pass
+
+    def warning(msg):
+        # print("Captured Warning: " + msg)
+        pass
+
+    def debug(msg):
+        # print("Captured Log: " + msg)
+        pass
+
+
 def get_video_urls(channel_name, choose_type="all"):
     """获取单一频道的所有视频URLs
 
@@ -53,6 +75,9 @@ def get_video_urls(channel_name, choose_type="all"):
         "quiet": True,
         "extract_flat": True,
         "force_generic_extractor": True,
+        "logger": loggerOutputs,
+        # "no_warnings": True,
+        # "ignoreerrors": True,  # 忽略错误
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -81,9 +106,11 @@ def get_video_urls(channel_name, choose_type="all"):
 
 
 def is_file_older_than_one_day(filepath):
+    if not os.path.exists(filepath):
+        return True
     last_modified_time = os.path.getmtime(filepath)
     current_time = time.time()
-    return (current_time - last_modified_time) > (24 * 60 * 60 * 7)
+    return (current_time - last_modified_time) > (24 * 60 * 60)
 
 
 def get_playlists(uploader_id):
@@ -91,9 +118,10 @@ def get_playlists(uploader_id):
     ydl_opts = {
         "skip_download": True,  # 不下载视频
         "extract_flat": True,  # 仅提取播放列表概要
-        "ignoreerrors": True,  # 忽略错误
+        # "ignoreerrors": True,  # 忽略错误
         "quiet": True,  # 减少输出
-        "no_warnings": True,  # 忽略警告
+        # "no_warnings": True,  # 忽略警告
+        "logger": loggerOutputs,  # 静默日志
     }
     playlist4videos = []
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -116,7 +144,7 @@ def get_playlists(uploader_id):
                     "videos": videos,
                 }
                 playlist4videos.append(data)
-        except:
+        except Exception:
             return None
     return playlist4videos
 
@@ -128,7 +156,7 @@ def make_videos(channel, videos_data):
             videos = get_video_urls(channel)
 
             break
-        except:
+        except Exception:
             # print(f"Failed to get {channel}'s videos, retrying...")
             time.sleep(5)
     for video_info in videos:
@@ -194,27 +222,34 @@ def update_video_urls():
     playlist_info = "cache/playlist_info.toml"
     videos_data = load_channels(playlist_info) if os.path.exists(playlist_info) else {}
     channels_data = load_channels()
+    print(f"Updating video URLs for {len(channels_data)} channels...")
 
     # 使用线程池处理每个频道
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        # 将每个频道的处理任务提交给线程池
-        future_to_channel = {
-            executor.submit(make_videos, channel, videos_data): channel
-            for channel in channels_data.keys()
-        }
+    try:
 
-        # 通过 tqdm 创建进度条
-        for future in tqdm(
-            as_completed(future_to_channel),
-            total=len(future_to_channel),
-            desc="Get video url",
-        ):
-            channel = future_to_channel[future]
-            try:
-                cur_urls = future.result()
-                urls.extend(cur_urls)
-            except Exception as e:
-                print(f"Error processing channel {channel}: {e}")
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            # 将每个频道的处理任务提交给线程池
+            future_to_channel = {
+                executor.submit(make_videos, channel, videos_data): channel
+                for channel in channels_data.keys()
+            }
+            print(len(future_to_channel))
+
+            # 通过 tqdm 创建进度条
+            for future in tqdm(
+                as_completed(future_to_channel),
+                total=len(future_to_channel),
+                desc="Get video url",
+            ):
+                channel = future_to_channel[future]
+                try:
+                    cur_urls = future.result()
+                    urls.extend(cur_urls)
+                except Exception as e:
+                    print(f"Error processing channel {channel}: {e}")
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt: Exiting...")
+        sys.exit(0)
 
     urls = flatten_list(urls)
     with open(playlist_info, "w") as toml_file:
@@ -225,12 +260,14 @@ def update_video_urls():
 
 def manage_video_urls():
     while True:
-        if is_file_older_than_one_day("cache/channels_video.toml"):
+        if not os.path.exists(
+            "cache/channels_video.toml"
+        ) or is_file_older_than_one_day("cache/channels_video.toml"):
             urls = update_video_urls()
             with open("cache/channels_video.toml", "w") as toml_file:
                 data = {"videos": urls}
                 toml.dump(data, toml_file)
-            countdown(60 * 60 * 24 * 7, "Video URLs updated.", "update again.")
+            countdown(60 * 60 * 24, "Video URLs updated.", "update again.")
 
         else:
             countdown(60 * 60 * 24, "Video URLs are up to date.", "check again.")

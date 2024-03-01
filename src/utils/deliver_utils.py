@@ -31,8 +31,8 @@ def make_delivery_info(title, video_path, thumbnail_path, tags, desc, tid, url, 
 }}"""
         print(prompt)
         ans = get_completion(prompt, json_output=True)
-        json_ans = json.loads(ans)
-        translate_tags.append(json_ans["tag"])
+        json_ans: dict = json.loads(ans)
+        translate_tags.append(list(json_ans.values())[0])
 
     return {
         "Title": title,
@@ -90,7 +90,7 @@ def save_completion(item, completion_path="cache/completed_videos.toml"):
 
 def interval_deliver():
     # 计算剩余时间
-    interval = datetime.timedelta(hours=4)
+    interval = datetime.timedelta(hours=6)
     # if elapsed_time < interval:
     #     remaining_time = interval - elapsed_time
 

@@ -18,8 +18,8 @@ def check_processing_state(cpath, fid, key, func):
 
 def load_channels(filename="asset/channels.toml"):
     """加载频道数据"""
-    with open(filename, "rb") as f:
-        return tomllib.load(f)
+    with open(filename, "r", encoding="utf-8") as f:
+        return toml.load(f)
 
 
 def get_or_cache(cache_path, compute_fn):

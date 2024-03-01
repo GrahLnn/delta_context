@@ -1,5 +1,7 @@
 import time, datetime, threading, re
 import tqdm
+from zoneinfo import ZoneInfo
+
 
 def status_circle(flag, message):
     if isinstance(message, str):
@@ -42,6 +44,27 @@ def countdown(t, desc="", next_operation=""):
         time.sleep(1)
         t -= 1
     # print("Countdown finished!")
+
+
+def sleep_until_morning(timezone_str="Asia/Shanghai"):
+    timezone = ZoneInfo(timezone_str)
+    now = datetime.datetime.now(timezone)
+    today = now.date()
+    start_sleep_time = datetime.datetime.combine(
+        today, datetime.time(23, 0), tzinfo=timezone
+    )
+    end_sleep_time = datetime.datetime.combine(
+        today, datetime.time(8, 0), tzinfo=timezone
+    ) + datetime.timedelta(days=1)
+
+    if now < datetime.datetime.combine(today, datetime.time(8, 0), tzinfo=timezone):
+        end_sleep_time -= datetime.timedelta(days=1)
+    # elif now > datetime.datetime.combine(today, datetime.time(23, 0), tzinfo=timezone):
+    #     start_sleep_time += datetime.timedelta(days=1)
+
+    if start_sleep_time <= now <= end_sleep_time:
+        sleep_seconds = int((end_sleep_time - now).total_seconds())
+        countdown(sleep_seconds, "Sleeping", "morning")
 
 
 def print_status(flag, desc=""):
@@ -98,16 +121,26 @@ class _CustomProgressBar(tqdm.tqdm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._current = self.n  # Set the initial value
-        
+
     def update(self, n):
         super().update(n)
         self._current += n
-        
+
         # 计算当前的进度比例
         progress_ratio = self._current / self.total
         # 使用 create_progress_bar 函数生成进度条
         progress_bar = create_progress_bar(progress_ratio)
 
         # 打印进度条
-        
-        print("Transcribing: " + progress_bar +" " + str(self._current)+"/" +str(self.total)+f"|{round(progress_ratio * 100, 2)}%", end=" \r", flush=True)
+
+        print(
+            "Transcribing: "
+            + progress_bar
+            + " "
+            + str(self._current)
+            + "/"
+            + str(self.total)
+            + f"|{round(progress_ratio * 100, 2)}%",
+            end=" \r",
+            flush=True,
+        )

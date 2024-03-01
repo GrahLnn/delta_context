@@ -124,13 +124,14 @@ def align_due_sentences(texts, cache_path, words):
             words = flatten_list(words)
             words = [w for w in words if w != {}]
         # print(nwords[0:100])
-        except:
+        except Exception:
             with open("words_check.toml", "w", encoding="utf-8") as f:
                 data = {
                     "a": ord_texts,
                     "b": proc_texts,
                     "c": " ".join([w["word"].strip() for w in words]),
                     "diff": text,
+                    "operation": del_info,
                     "words": ord_words,
                     "time": datetime.now(),
                 }
@@ -181,9 +182,10 @@ def align_due_sentences(texts, cache_path, words):
     words = check_words_equal(" ".join(texts), " ".join(one_transcripts), words)
 
     print(f'length check: {len(words)}/{len(" ".join(transcripts).split())}')
-    if len(words) != len(" ".join(transcripts).split()):
+    if " ".join([w["word"].strip() for w in words]) != " ".join(transcripts):
         raise ValueError("transcripts and words not equal")
 
+    # sys.exti()
     # test = Redlines(" ".join(texts), " ".join(transcripts), markdown_style="none")
     # with open("redlines.md", "w", encoding="utf-8") as f:
     #     f.write(test.output_markdown)
@@ -337,6 +339,8 @@ def deliver_and_save_completion(items, credential=None):
                         item["Season"],
                         item["MetaDataPath"],
                     )
+                    if not res_ids:
+                        raise ValueError("upload failed, can not match res_ids")
                     # upload 会修改 info，所以需要重新加载
                     info = load_cache(item["MetaDataPath"])
                     info["aid"] = res_ids["aid"]
@@ -345,7 +349,7 @@ def deliver_and_save_completion(items, credential=None):
                     save_cache(info, item["MetaDataPath"])
                 # await deliver(item, credential)
                 # 将id写入视频的meta data文件里，然后将当前时间，id，summary交给另一个线程去做置顶评论
-                if item["summary"] and info.get("aid", False):
+                if item["Summary"] and info.get("aid", False):
 
                     task = {
                         "time": datetime.now().timestamp(),
@@ -355,6 +359,7 @@ def deliver_and_save_completion(items, credential=None):
                     }
                     with thread_lock:
                         comment_tasks.append(task)
+                        # comment_tasks = list(set(comment_tasks))
 
                 break
 

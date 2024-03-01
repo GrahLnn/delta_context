@@ -467,7 +467,10 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
         # 获取验证码坐标
         element = driver.find_element(By.CLASS_NAME, "geetest_item_wrap")
         # X, Y = get_location(element, driver)
-        X, Y = element.location["x"], element.location["y"] - 1015
+        X, Y = element.location["x"], element.location["y"]
+        scroll_y = driver.execute_script("return window.pageYOffset;")
+        print("scroll_y", scroll_y)
+        Y -= scroll_y
         print("captcha_elem", X, Y)
         # 前端展示对于原图的缩放比例
         lan_x = 306 / 334
@@ -484,14 +487,15 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
                 -(X + x * lan_x), -(Y + y * lan_y)
             ).perform()  # 将鼠标位置恢复到移动前
             time.sleep(0.5)
-
+        driver.save_screenshot("screenshot.png")
         xpath = '//*[@class="geetest_commit_tip"]'
         wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
 
         time.sleep(1)
         # xpath = "/html/body/div[4]/div[2]/div[6]/div/div/div[3]/div/a[2]"
         # wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
-        wait.until(
+        driver.save_screenshot("screenshot1.png")
+        WebDriverWait(driver, 60).until(
             EC.presence_of_element_located(
                 (
                     By.XPATH,
@@ -504,27 +508,42 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
     save_cache(info, metadatapath)
 
     logs = driver.get_log("performance")
-    bvid_msg = None
+    with open("bvid_msg_log.txt", "w") as f:
+        f.write(str(logs))
+    bvid_msgs = []
     for log in logs:
-        if "bvid" in log["message"]:
+        if "bvid" in log["message"] and "aid" in log["message"]:
             # print(json.loads(log["message"])["message"])
-            bvid_msg = json.loads(log["message"])["message"]["params"]["request"][
-                "postData"
-            ]
-            break
-    if not bvid_msg:
-        print(logs)
+            try:
+                bvid_msg = json.loads(log["message"])["message"]["params"]["request"][
+                    "postData"
+                ]
+                bvid_msgs.append(bvid_msg)
+            except Exception:
+                continue
+
+    if not bvid_msgs:
+        # print(logs)
         raise Exception("bvid not found")
     # print(bvid_msg)
-    with open("bvid_msg_log.txt", "w") as f:
-        f.write(str(log))
-    reg = r"\|\{.*?\}\|"
-    matches = re.findall(reg, bvid_msg)[0]
-    print(matches)
-    matches = matches.replace("|", "")
-    matches = json.loads(matches)
 
-    res_id = matches["value"]["res"]
+    reg = r"\|\{.*?\}\|"
+    matches = []
+    for bvid_msg in bvid_msgs:
+        match = re.findall(reg, bvid_msg)
+        if match:
+            matches.append(match[0])
+    # matches = matches[0]
+    # print(matches)
+    res_id = None
+    for match in matches:
+        match = match.replace("|", "")
+        match = json.loads(match)
+        try:
+            res_id = match["value"]["res"]
+            break
+        except Exception:
+            continue
 
     print("done aid and bvid", res_id)
     driver.quit()

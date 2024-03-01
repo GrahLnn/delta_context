@@ -596,12 +596,17 @@ def extract_text_and_numbers(text):
 
 
 def make_tag_info(diff_markdown):
+    # print(diff_markdown)
     diff_list = diff_markdown.split()
     operations = []
     for idx, word in enumerate(diff_list):
         # stage: list = ["delete", "replace", "insert"]
         if word.startswith("<del>"):
             operations.append({"stage": "delete", "start_idx": idx})
+            if "</del><ins>" in word:
+                operations[-1]["stage"] = "replace"
+            if "</ins>" in word:
+                operations[-1]["end_idx"] = idx + 1
         elif word.startswith("</del><ins>"):
             operations[-1]["stage"] = "replace"
         elif word.startswith("<ins>"):
@@ -611,6 +616,7 @@ def make_tag_info(diff_markdown):
         elif word.startswith("</ins>"):
             operations[-1]["end_idx"] = idx
             # operations[-1]["id_str"] = " ".join(diff_list[operations[-1]["start_idx"] + 1 : idx])
+
     for idx, op in enumerate(operations):
         if op["stage"] != "insert":
             check_text = " ".join(diff_list[op["start_idx"] : op["end_idx"]])
@@ -619,9 +625,11 @@ def make_tag_info(diff_markdown):
                     r"<del>(.*?)</del>",
                     check_text,
                 ).group(1)
-                operations[idx]["ins_text"] = check_text.replace(
-                    f"<del>{operations[idx]['del_text']}</del>", ""
-                ).replace("<ins>", "")
+                operations[idx]["ins_text"] = (
+                    check_text.replace(f"<del>{operations[idx]['del_text']}</del>", "")
+                    .replace("<ins>", "")
+                    .replace("</ins>", "")
+                )
             except Exception:
                 operations[idx]["del_text"] = check_text.replace("<del>", "")
         else:
@@ -662,7 +670,11 @@ def make_tag_info(diff_markdown):
             opera_count += 1
 
     operations = del_operations + ins_operations
+    # for op in operations:
+    #     print(op)
+    # import sys
 
+    # sys.exit()
     return operations
 
 
