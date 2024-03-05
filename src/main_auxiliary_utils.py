@@ -123,8 +123,7 @@ def align_due_sentences(texts, cache_path, words):
             words = make_words_equal(words, del_info)
             words = flatten_list(words)
             words = [w for w in words if w != {}]
-        # print(nwords[0:100])
-        except Exception:
+            # print(nwords[0:100])
             with open("words_check.toml", "w", encoding="utf-8") as f:
                 data = {
                     "a": ord_texts,
@@ -136,6 +135,19 @@ def align_due_sentences(texts, cache_path, words):
                     "time": datetime.now(),
                 }
                 toml.dump(data, f)
+        except Exception as e:
+            # with open("words_check.toml", "w", encoding="utf-8") as f:
+            #     data = {
+            #         "a": ord_texts,
+            #         "b": proc_texts,
+            #         "c": " ".join([w["word"].strip() for w in words]),
+            #         "diff": text,
+            #         "operation": del_info,
+            #         "words": ord_words,
+            #         "time": datetime.now(),
+            #     }
+            #     toml.dump(data, f)
+            raise e
 
         return words
 
@@ -182,7 +194,7 @@ def align_due_sentences(texts, cache_path, words):
     words = check_words_equal(" ".join(texts), " ".join(one_transcripts), words)
 
     print(f'length check: {len(words)}/{len(" ".join(transcripts).split())}')
-    if " ".join([w["word"].strip() for w in words]) != " ".join(transcripts):
+    if len(words) != len(" ".join(transcripts).split()):
         raise ValueError("transcripts and words not equal")
 
     # sys.exti()

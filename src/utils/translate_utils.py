@@ -87,7 +87,7 @@ you：
     #         "sentence2": "sentence1的翻译对应"
     #     }}]
     # """
-    response = get_completion(prompt, json_output=True)
+    response = get_completion(prompt, json_output=True, temperature=1)
     # print(response)
     parsed_json = json.loads(response)
 

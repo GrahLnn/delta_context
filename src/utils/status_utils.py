@@ -48,23 +48,27 @@ def countdown(t, desc="", next_operation=""):
 
 def sleep_until_morning(timezone_str="Asia/Shanghai"):
     timezone = ZoneInfo(timezone_str)
-    now = datetime.datetime.now(timezone)
+    now = datetime.datetime.now(timezone).replace(tzinfo=None)
     today = now.date()
-    start_sleep_time = datetime.datetime.combine(
-        today, datetime.time(23, 0), tzinfo=timezone
-    )
-    end_sleep_time = datetime.datetime.combine(
-        today, datetime.time(8, 0), tzinfo=timezone
-    ) + datetime.timedelta(days=1)
 
-    if now < datetime.datetime.combine(today, datetime.time(8, 0), tzinfo=timezone):
-        end_sleep_time -= datetime.timedelta(days=1)
-    # elif now > datetime.datetime.combine(today, datetime.time(23, 0), tzinfo=timezone):
-    #     start_sleep_time += datetime.timedelta(days=1)
+    # 定义今天的早上8点和晚上23点
+    morning_8 = datetime.datetime.combine(today, datetime.time(8, 0))
+    night_23 = datetime.datetime.combine(today, datetime.time(23, 0))
 
-    if start_sleep_time <= now <= end_sleep_time:
-        sleep_seconds = int((end_sleep_time - now).total_seconds())
-        countdown(sleep_seconds, "Sleeping", "morning")
+    # 判断当前时间是否不在早上8点到晚上23点之间
+    if not morning_8 <= now <= night_23:
+        # 如果当前时间已经超过今天的晚上23点，目标时间设为第二天的早上8点
+        if now > night_23:
+            target_time = morning_8 + datetime.timedelta(days=1)
+        else:
+            # 如果当前时间早于早上8点，目标时间就是今天的早上8点
+            target_time = morning_8
+
+        # 计算需要sleep的时间（秒）
+        sleep_seconds = int((target_time - now).total_seconds())
+
+        # 调用倒计时函数，这里假设是异步的
+        countdown(sleep_seconds, "Sleeping", "Start working")
 
 
 def print_status(flag, desc=""):

@@ -276,15 +276,15 @@ def extract_vocal(audio_path, output_path, output_name):
             process_data,
         )
         desc[0] = "vad clean"
-        vad_clean(
-            f"{output_path}/clean_speaker/1_1_(Vocals).wav",
-            output_path,
-            output_name,
-        )
-        # shutil.copy(
+        # vad_clean(
         #     f"{output_path}/clean_speaker/1_1_(Vocals).wav",
-        #     f"{output_path}/{output_name}.wav",
+        #     output_path,
+        #     output_name,
         # )
+        shutil.copy(
+            f"{output_path}/clean_speaker/1_1_(Vocals).wav",
+            f"{output_path}/{output_name}.wav",
+        )
         flag[0] = False
     except Exception as e:
         flag[0] = False

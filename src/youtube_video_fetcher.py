@@ -5,6 +5,7 @@ from tqdm import tqdm
 from .utils.LLM_utils import get_completion
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .utils.status_utils import countdown
+import json
 
 
 def extract_url_info(url):
@@ -219,8 +220,12 @@ def make_videos(channel, videos_data):
 def update_video_urls():
     urls = []
 
-    playlist_info = "cache/playlist_info.toml"
-    videos_data = load_channels(playlist_info) if os.path.exists(playlist_info) else {}
+    playlist_info = "cache/playlist_info.json"
+    if os.path.exists(playlist_info):
+        with open(playlist_info, "r", encoding="") as json_file:
+            videos_data = json.load(json_file)
+    else:
+        videos_data = {}
     channels_data = load_channels()
     print(f"Updating video URLs for {len(channels_data)} channels...")
 
@@ -252,9 +257,8 @@ def update_video_urls():
         sys.exit(0)
 
     urls = flatten_list(urls)
-    with open(playlist_info, "w") as toml_file:
-        data = videos_data
-        toml.dump(data, toml_file)
+    with open(playlist_info, "w", encoding="utf-8") as json_file:
+        json.dump(videos_data, json_file, indent=4)
     return urls
 
 

@@ -49,9 +49,50 @@ async def send_comment(summary, oid, root=None):
     return rpid
 
 
+def split_long_comment(comment: list):
+    i = 0
+    while i < len(comment):
+        if len(comment[i]) > 900:
+            # 按\n分割当前项
+            parts = comment[i].split("\n")
+            new_item = []  # 用来存储新生成的项，长度不超过900
+            current_length = 0  # 当前new_item的长度
+            for part in parts:
+                part_length = len(part) + 1  # 加上一个换行符的长度
+                # 检查是否加上这部分会超过900
+                if current_length + part_length > 900:
+                    # 如果new_item不为空，将其作为一个新项添加到res中，并重置new_item
+                    if new_item:
+                        comment[i] = "\n".join(new_item)
+                        new_item = [part]  # 将当前部分作为新项的开始
+                        current_length = part_length
+                        # 将剩余的部分插入到下一个位置，如果是最后一项，则追加到列表末尾
+                        if i + 1 < len(comment):
+                            comment.insert(i + 1, "\n".join(parts[parts.index(part) :]))
+                        else:
+                            comment.append("\n".join(parts[parts.index(part) :]))
+                        break  # 跳出循环，因为剩余部分已经作为新项处理
+                    else:
+                        # 如果new_item为空，说明当前部分本身就超过900，直接作为新项处理
+                        if i + 1 < len(comment):
+                            comment[i + 1] = part + "\n" + comment[i + 1]
+                        else:
+                            comment.append(part)
+                        break  # 当前项处理完毕
+                else:
+                    new_item.append(part)
+                    current_length += part_length
+            else:
+                # 如果没有超出部分，更新当前项
+                comment[i] = "\n".join(new_item)
+        i += 1  # 移动到下一个项进行检查
+    return comment
+
+
 def send_summary(summary, oid):
     summary_groups = split_summary(summary)
     summary_groups = ["\n\n".join(s) for s in summary_groups]
+    summary_groups = split_long_comment(summary_groups)
     rpids = []
     for idx, s in enumerate(summary_groups):
         rpid = sync(send_comment(s, oid=oid, root=rpids[0] if idx != 0 else None))

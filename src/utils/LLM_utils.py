@@ -132,7 +132,11 @@ def get_completion(
     while True:
         try:
             response = predict_no_ui_long_connection(
-                prompt, sys_prompt, json_output=json_output, model=model
+                prompt,
+                sys_prompt,
+                json_output=json_output,
+                model=model,
+                temperature=temperature,
             )
             break
         except Exception as e:
@@ -200,6 +204,7 @@ def generate_payload(
     stream,
     model="gpt-3.5-turbo-1025",
     json_output=False,
+    temperature=0,
 ):
     """
     整合所有信息，生成OpenAI HTTP请求的headers和payload，为发送请求做准备。
@@ -232,7 +237,7 @@ def generate_payload(
     payload = {
         "model": model,
         "messages": messages,
-        "temperature": 0,
+        "temperature": temperature,
         "top_p": 1,
         "n": 1,
         "stream": stream,
@@ -383,6 +388,7 @@ def predict_no_ui_long_connection(
     history=[],
     json_output=False,
     model="gpt-3.5-turbo-0125 ",
+    temperature=0,
 ):
     """
     发送至chatGPT，等待回复，一次性完成，不显示中间过程。但内部用stream的方法避免中途网线被掐。
@@ -407,6 +413,7 @@ def predict_no_ui_long_connection(
         stream=True,
         model=model,
         json_output=json_output,
+        temperature=temperature,
     )
     result = chat_complation(headers, payload)
     # print()

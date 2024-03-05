@@ -383,6 +383,17 @@ async def summarize(
         )
     if not chapters:
         raise Exception("summarize failed, no chapters")
+
+    async def retry_task(create_task_func, retry_count=0):
+        try:
+            return await create_task_func()
+        except Exception as e:
+            if retry_count < max_retries:
+                await asyncio.sleep(retry_interval)  # 等待一段时间再重试
+                return await retry_task(create_task_func, retry_count + 1)
+            else:
+                raise e
+
     tasks = []
     for i, c in enumerate(chapters):
         start_time = c.start
@@ -394,26 +405,18 @@ async def summarize(
             start_time=start_time,
             end_time=end_time,
         )
-        tasks.append(
-            _summarize_chapter(
-                chapter=c,
-                timed_texts=texts,
-                lang=lang,
-            )
+        # 通过函数来创建新的协程任务
+        create_task_func = lambda c=c, texts=texts, lang=lang: _summarize_chapter(
+            chapter=c,
+            timed_texts=texts,
+            lang=lang,
         )
+        tasks.append(create_task_func)
+
     max_retries = 3  # 设置最大重试次数
     retry_interval = 60  # 设置重试间隔（秒）
 
-    async def retry_task(task, retry_count=0):
-        try:
-            return await task
-        except Exception as e:
-            if retry_count < max_retries:
-                await asyncio.sleep(retry_interval)  # 等待一段时间再重试
-                return await retry_task(task, retry_count + 1)
-            else:
-                raise e
-
+    # 使用create_task_func创建新任务
     res = await asyncio.gather(
         *(retry_task(task) for task in tasks), return_exceptions=True
     )

@@ -180,7 +180,7 @@ def split_stage(transcripts, translates, desc):
             while True:
                 modified = False  # 标记是否进行了修改
                 while_count += 1
-                if while_count > 50:
+                if while_count > 10:
                     raise Exception("dead loop error")
 
                 for idx in range(len(seg_tc)):

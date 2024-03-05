@@ -50,36 +50,22 @@ from uvr.uvr_cli import ModelData
 from src.utils.video_comment import comment_tasks, comment_summary_to_video
 from src.utils.deliver_utils import interval_deliver
 from src.utils.status_utils import sleep_until_morning
+from zoneinfo import ZoneInfo
 
 # from bilibili_api import settings
+timezone = ZoneInfo("Asia/Shanghai")
+now = datetime.datetime.now(timezone).replace(tzinfo=None)
+today = now.date()
 
+# 定义今天的早上8点和晚上23点
+morning_8 = datetime.datetime.combine(today, datetime.time(8, 0))
+night_23 = datetime.datetime.combine(today, datetime.time(23, 0))
 
 # settings.proxy = "https://api.mahiron.moe"
 try:
     checker.can_execute_request()
 except Exception:
     checker.start()
-limit = None
-addition = [
-    # {
-    #     "url": "https://www.youtube.com/watch?v=5j05RWh1ypk",
-    #     "uploader": "@CppCon",
-    # }
-]
-channel_filter = []
-playlist_filter = ["Flutter Package of the Week", "Flutter Widget of the Week"]
-
-video_datas = get_all_video_urls(force_update=False)
-
-video_datas = filter_channel(channel_filter, video_datas)
-# fileter playlist
-video_datas = add_addition_videos(addition, video_datas)
-video_datas = filter_items(video_datas)
-video_datas = (
-    [item for item in video_datas if item.get("playlist") not in playlist_filter]
-    if playlist_filter
-    else video_datas
-)
 
 # video_datas = [
 #     {
@@ -100,7 +86,7 @@ except Exception as e:
 # thread.daemon = True  # 将线程设置为守护线程，这样当主程序退出时，线程也会退出
 # thread.start()
 
-video_datas = video_datas[:limit] if limit else video_datas
+
 # sys.exit()
 # credential = get_credential()
 
@@ -110,7 +96,7 @@ if os.path.exists("cache/comment_task.toml"):
         with open("cache/comment_task.toml", "rb") as toml_file:
             pre_comment_task = tomllib.load(toml_file)["comment_task"]
 
-        pre_comment_task = list(set(pre_comment_task))
+        # pre_comment_task = list(set(pre_comment_task))
         comment_tasks.extend(pre_comment_task)
 
     except Exception as e:
@@ -123,14 +109,11 @@ atexit.register(save_tasklist)
 daemon = threading.Thread(target=comment_summary_to_video)
 daemon.setDaemon(True)
 daemon.start()
-
+delivery_videos = []
 if os.path.exists("cache/delivery_videos.toml"):
     with open("cache/delivery_videos.toml", "rb") as toml_file:
         delivery_videos = tomllib.load(toml_file)["delivery_videos"]
     deliver_and_save_completion(delivery_videos)
-    video_datas = [
-        item for item in video_datas if item.get("url") not in delivery_videos
-    ]
 
     # asyncio.run(deliver_and_save_completion(delivery_videos, credential))
     # interval_deliver()
@@ -138,9 +121,46 @@ if os.path.exists("cache/delivery_videos.toml"):
 
 # TODO 实现全局一致的名词翻译，多说话人盲源分离
 # interval_deliver()
-
+refrash_list = False
 upload_count = 0
-for item in video_datas:
+video_datas = []
+while True:
+    if refrash_list and now > morning_8 + datetime.timedelta(days=1):
+        refrash_list = False
+    if not refrash_list:
+        limit = None
+        addition = [
+            # {
+            #     "url": "https://www.youtube.com/watch?v=5j05RWh1ypk",
+            #     "uploader": "@CppCon",
+            # }
+        ]
+        channel_filter = []
+        playlist_filter = ["Flutter Package of the Week", "Flutter Widget of the Week"]
+
+        video_datas = get_all_video_urls(force_update=False)
+
+        video_datas = filter_channel(channel_filter, video_datas)
+        # fileter playlist
+        video_datas = add_addition_videos(addition, video_datas)
+        video_datas = filter_items(video_datas)
+        video_datas = (
+            [
+                item
+                for item in video_datas
+                if item.get("playlist") not in playlist_filter
+            ]
+            if playlist_filter
+            else video_datas
+        )
+        video_datas = video_datas[:limit] if limit else video_datas
+        if delivery_videos:
+            video_datas = [
+                item for item in video_datas if item.get("url") not in delivery_videos
+            ]
+        refrash_list = True
+
+    item = video_datas.pop(0)
     sleep_until_morning()
     start_time = datetime.datetime.now()
     elapsed_time = datetime.timedelta(seconds=0)
@@ -193,7 +213,7 @@ for item in video_datas:
     # print(afile)
 
     result = get_transcribe(afile, cpath, add_timestamps=True)
-    # print()
+    print()
     # sys.exit()
     words = []
     for chunk in result["chunks"]:

@@ -55,6 +55,7 @@ def transcribe_with_whisper(audio_file, timestamps=False):
             compression_ratio_threshold=1.5,
             fp16=False,
             verbose=None,
+            # language="en",
             # temperature=0,
         )
 
@@ -63,8 +64,8 @@ def transcribe_with_whisper(audio_file, timestamps=False):
         new_result["language"] = result["language"]
         new_result["chunks"] = result["segments"]
 
-        if new_result["language"] != "en":
-            raise ValueError("Language is not English")
+        # if new_result["language"] != "en":
+        #     raise ValueError(f"Language is not English, {new_result['language']}")
         for idx, chunk in enumerate(new_result["chunks"]):
             new_result["chunks"][idx]["timestamp"] = [
                 round(float(chunk["start"]), 2),

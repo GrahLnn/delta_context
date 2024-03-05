@@ -237,63 +237,40 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
     print("send tags", tags)
     tag_failed_count = 0
     for tag in tags:
-        tag = tag.strip()
-        wait.until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//input[@placeholder='按回车键Enter创建标签']",
-                )
-            )
-        )
-        tag_input = driver.find_element(
-            By.XPATH, "//input[@placeholder='按回车键Enter创建标签']"
-        )
-        tag_input.click()
-
-        tag_input.send_keys(tag)
-
-        tag_input.send_keys(Keys.ENTER)
-        # time.sleep(1)
-
         try:
+            tag = tag.strip()
             wait.until(
                 EC.presence_of_element_located(
                     (
                         By.XPATH,
-                        f"//div[@class='tag-pre-wrp']//p[contains(text(), '{tag}')]",
+                        "//input[@placeholder='按回车键Enter创建标签']",
                     )
                 )
             )
-            print("tag", tag)
+            tag_input = driver.find_element(
+                By.XPATH, "//input[@placeholder='按回车键Enter创建标签']"
+            )
+            tag_input.click()
+
+            tag_input.send_keys(tag)
+
+            tag_input.send_keys(Keys.ENTER)
+            # time.sleep(1)
+
+            try:
+                wait.until(
+                    EC.presence_of_element_located(
+                        (
+                            By.XPATH,
+                            f"//div[@class='tag-pre-wrp']//p[contains(text(), '{tag}')]",
+                        )
+                    )
+                )
+                print("tag", tag)
+            except Exception:
+                tag_failed_count += 1
         except Exception:
-            # print("tag retry")
-            # wait.until(
-            #     EC.presence_of_element_located(
-            #         (
-            #             By.XPATH,
-            #             "//input[@placeholder='按回车键Enter创建标签']",
-            #         )
-            #     )
-            # )
-            # tag_input = driver.find_element(
-            #     By.XPATH, "//input[@placeholder='按回车键Enter创建标签']"
-            # )
-            # tag_input.click()
-
-            # tag_input.send_keys(tag)
-
-            # tag_input.send_keys(Keys.ENTER)
-            # wait.until(
-            #     EC.presence_of_element_located(
-            #         (
-            #             By.XPATH,
-            #             f"//div[@class='tag-pre-wrp']//p[contains(text(), '{tag}')]",
-            #         )
-            #     )
-            # )
-
-            tag_failed_count += 1
+            driver.save_screenshot("screenshot.png")
     if tag_failed_count == len(tags):
         # print("tag fill failed")
         raise ValueError("tag fill failed")
@@ -444,65 +421,78 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
             )
         )
     except Exception:
-        xpath = '//*[@class="geetest_item_wrap"]'
-        captcha_elem = wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
-        f = captcha_elem.get_attribute("style")
-        captcha_url = re.findall('url\("(.+?)"\);', f)
-        captcha_url = captcha_url[0] if captcha_url else None
-        if not captcha_url:
-            raise ValueError("captcha url not found")
-        img_bytes = httpx.get(captcha_url).content
-        img_base64_str = base64.b64encode(img_bytes).decode("utf-8")
-        url = "http://127.0.0.1:5000/detect"
-        data = {"image_base64": img_base64_str}
-        response = httpx.post(url, json=data)
-        detection_list = response.json()
-        if "error" in detection_list:
-            raise ValueError(detection_list["error"])
-        print("response", response)
-        print("detection_list", detection_list)
-        # 送入模型识别
-        plan = predict(img_bytes, detection_list)
-        print("plan", plan)
-        # 获取验证码坐标
-        element = driver.find_element(By.CLASS_NAME, "geetest_item_wrap")
-        # X, Y = get_location(element, driver)
-        X, Y = element.location["x"], element.location["y"]
-        scroll_y = driver.execute_script("return window.pageYOffset;")
-        print("scroll_y", scroll_y)
-        Y -= scroll_y
-        print("captcha_elem", X, Y)
-        # 前端展示对于原图的缩放比例
-        lan_x = 306 / 334
-        lan_y = 343 / 384
-        for i, crop in enumerate(plan):
-            x1, y1, x2, y2 = crop
-            x, y = [(x1 + x2) / 2, (y1 + y2) / 2]
-            print(X + x * lan_x, Y + y * lan_y)
-
-            ActionChains(driver).move_by_offset(
-                X + x * lan_x, Y + y * lan_y
-            ).click().perform()
-            ActionChains(driver).move_by_offset(
-                -(X + x * lan_x), -(Y + y * lan_y)
-            ).perform()  # 将鼠标位置恢复到移动前
-            time.sleep(0.5)
-        driver.save_screenshot("screenshot.png")
-        xpath = '//*[@class="geetest_commit_tip"]'
-        wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
-
-        time.sleep(1)
-        # xpath = "/html/body/div[4]/div[2]/div[6]/div/div/div[3]/div/a[2]"
-        # wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
-        driver.save_screenshot("screenshot1.png")
-        WebDriverWait(driver, 60).until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    "//div[@class='step-des' and contains(text(), '稿件投递成功')]",
+        try_count = 0
+        while try_count < 3:
+            try:
+                xpath = '//*[@class="geetest_item_wrap"]'
+                captcha_elem = wait.until(
+                    EC.presence_of_element_located((By.XPATH, xpath))
                 )
-            )
-        )
+                f = captcha_elem.get_attribute("style")
+                captcha_url = re.findall('url\("(.+?)"\);', f)
+                captcha_url = captcha_url[0] if captcha_url else None
+                if not captcha_url:
+                    raise ValueError("captcha url not found")
+                img_bytes = httpx.get(captcha_url).content
+                img_base64_str = base64.b64encode(img_bytes).decode("utf-8")
+                url = "http://127.0.0.1:5000/detect"
+                data = {"image_base64": img_base64_str}
+                response = httpx.post(url, json=data)
+                detection_list = response.json()
+                if "error" in detection_list:
+                    raise ValueError(detection_list["error"])
+                print("response", response)
+                print("detection_list", detection_list)
+                # 送入模型识别
+                plan = predict(img_bytes, detection_list)
+                print("plan", plan)
+                # 获取验证码坐标
+                element = driver.find_element(By.CLASS_NAME, "geetest_item_wrap")
+                # X, Y = get_location(element, driver)
+                X, Y = element.location["x"], element.location["y"]
+                scroll_y = driver.execute_script("return window.pageYOffset;")
+                print("scroll_y", scroll_y)
+                Y -= scroll_y
+                print("captcha_elem", X, Y)
+                # 前端展示对于原图的缩放比例
+                lan_x = 306 / 334
+                lan_y = 343 / 384
+                for i, crop in enumerate(plan):
+                    x1, y1, x2, y2 = crop
+                    x, y = [(x1 + x2) / 2, (y1 + y2) / 2]
+                    print(X + x * lan_x, Y + y * lan_y)
+
+                    ActionChains(driver).move_by_offset(
+                        X + x * lan_x, Y + y * lan_y
+                    ).click().perform()
+                    ActionChains(driver).move_by_offset(
+                        -(X + x * lan_x), -(Y + y * lan_y)
+                    ).perform()  # 将鼠标位置恢复到移动前
+                    time.sleep(0.5)
+                driver.save_screenshot("screenshot.png")
+                xpath = '//*[@class="geetest_commit_tip"]'
+                wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
+
+                time.sleep(1)
+                # xpath = "/html/body/div[4]/div[2]/div[6]/div/div/div[3]/div/a[2]"
+                # wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
+                driver.save_screenshot("screenshot1.png")
+                WebDriverWait(driver, 60).until(
+                    EC.presence_of_element_located(
+                        (
+                            By.XPATH,
+                            "//div[@class='step-des' and contains(text(), '稿件投递成功')]",
+                        )
+                    )
+                )
+                break
+            except Exception as e:
+                print("captcha failed", e)
+                try_count += 1
+                time.sleep(1)
+
+    if try_count == 3:
+        raise ValueError("captcha failed")
     info = load_cache(metadatapath)
     info["is_delivered"] = True
     save_cache(info, metadatapath)

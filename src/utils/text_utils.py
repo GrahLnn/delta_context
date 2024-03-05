@@ -596,60 +596,88 @@ def extract_text_and_numbers(text):
 
 
 def make_tag_info(diff_markdown):
-    # print(diff_markdown)
-    diff_list = diff_markdown.split()
+    # 分割原始字符串为单词数组
+    words = diff_markdown.split()
+    # 创建一个字符串，其中包含单词和它们在原始字符串中的起始位置
+    positions = [0]
+    for word in words:
+        positions.append(positions[-1] + len(word) + 1)  # 加1因为空格
+
+    # 正则表达式匹配 <del>...</del> 和 <ins>...</ins>
+    pattern = r"(<del>.*?</del>)|(<ins>.*?</ins>)"
+    matches = list(re.finditer(pattern, diff_markdown, re.DOTALL))
+
     operations = []
-    for idx, word in enumerate(diff_list):
-        # stage: list = ["delete", "replace", "insert"]
-        if word.startswith("<del>"):
-            operations.append({"stage": "delete", "start_idx": idx})
-            if "</del><ins>" in word:
-                operations[-1]["stage"] = "replace"
-            if "</ins>" in word:
-                operations[-1]["end_idx"] = idx + 1
-        elif word.startswith("</del><ins>"):
-            operations[-1]["stage"] = "replace"
-        elif word.startswith("<ins>"):
-            operations.append({"stage": "insert", "start_idx": idx})
-        elif word.startswith("</del>"):
-            operations[-1]["end_idx"] = idx
-        elif word.startswith("</ins>"):
-            operations[-1]["end_idx"] = idx
-            # operations[-1]["id_str"] = " ".join(diff_list[operations[-1]["start_idx"] + 1 : idx])
+
+    i = 0
+    while i < len(matches):
+        match = matches[i]
+        start_pos, end_pos = match.span()
+
+        # 将字符位置转换为单词数组中的索引
+        start_idx = (
+            next((i for i, pos in enumerate(positions) if pos > start_pos), len(words))
+            - 1
+        )
+        end_idx = (
+            next((i for i, pos in enumerate(positions) if pos >= end_pos), len(words))
+            - 1
+        ) + 1
+
+        if (
+            match.group().startswith("<del>")
+            and i + 1 < len(matches)
+            and matches[i + 1].group().startswith("<ins>")
+        ):
+            next_match = matches[i + 1]
+            next_start_pos, next_end_pos = next_match.span()
+            if end_pos == next_start_pos:
+                # 替换操作
+                operations.append(
+                    {
+                        "stage": "replace",
+                        "start_idx": start_idx,
+                        "end_idx": end_idx,
+                        "del_text": match.group(1)[5:-6],
+                        "ins_text": next_match.group(2)[5:-6],
+                    }
+                )
+                i += 2  # 跳过下一个匹配项
+                continue
+        if match.group().startswith("<del>"):
+            # 删除操作
+            operations.append(
+                {
+                    "stage": "delete",
+                    "start_idx": start_idx,
+                    "end_idx": end_idx,
+                    "del_text": match.group(1)[5:-6],
+                }
+            )
+        elif match.group().startswith("<ins>"):
+            # 插入操作
+            operations.append(
+                {
+                    "stage": "insert",
+                    "start_idx": start_idx,
+                    "end_idx": end_idx,
+                    "ins_text": match.group(2)[5:-6],
+                }
+            )
+        i += 1
 
     for idx, op in enumerate(operations):
-        if op["stage"] != "insert":
-            check_text = " ".join(diff_list[op["start_idx"] : op["end_idx"]])
-            try:
-                operations[idx]["del_text"] = re.search(
-                    r"<del>(.*?)</del>",
-                    check_text,
-                ).group(1)
-                operations[idx]["ins_text"] = (
-                    check_text.replace(f"<del>{operations[idx]['del_text']}</del>", "")
-                    .replace("<ins>", "")
-                    .replace("</ins>", "")
-                )
-            except Exception:
-                operations[idx]["del_text"] = check_text.replace("<del>", "")
-        else:
-
-            if idx + 1 < len(operations):
+        if op["stage"] == "insert":
+            if idx != len(operations) - 1:
                 operations[idx]["id_str"] = " ".join(
-                    diff_list[op["start_idx"] : operations[idx + 1]["start_idx"]]
-                )
+                    words[op["start_idx"] : operations[idx + 1]["start_idx"] - 1]
+                ).replace(f"<ins>{op['ins_text']}</ins>", "")
             else:
-                operations[idx]["id_str"] = " ".join(diff_list[op["start_idx"] :])
-            id_str = operations[idx]["id_str"]
-            operations[idx]["ins_text"] = re.search(r"<ins>(.*?)</ins>", id_str).group(
-                1
-            )
-            operations[idx]["id_str"] = id_str.replace(
-                f"<ins>{operations[idx]['ins_text']}</ins>", ""
-            )
+                operations[idx]["id_str"] = " ".join(words[op["start_idx"] :])
 
-            # print(operations[idx])
-
+    print(operations)
+    for op in operations:
+        print(words[op["start_idx"] : op["end_idx"]])
     ins_tags = re.finditer(r"<ins>.*?</ins>", diff_markdown)
     new_text = diff_markdown
     for tag in ins_tags:
@@ -675,6 +703,7 @@ def make_tag_info(diff_markdown):
     # import sys
 
     # sys.exit()
+    print(operations)
     return operations
 
 
