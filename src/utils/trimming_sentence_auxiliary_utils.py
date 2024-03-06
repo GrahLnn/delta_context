@@ -147,7 +147,7 @@ def split_stage(transcripts, translates, desc):
     ):
         chinese_characters = len(re.findall(r"[\u4e00-\u9fff]", translate))
 
-        if chinese_characters > 26:
+        if chinese_characters > 24:
             parsed_json = split_by_LLM(transcript, translate)
             # print(transcript)
             # print(translate)

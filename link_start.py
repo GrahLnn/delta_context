@@ -460,6 +460,6 @@ while True:
         f"Done processing `{fid}` from `{item.get('uploader')}`, a {round(audio_length_minutes,2)} minutes video, take {formatted_time} minute and ${round(cost_calculator.get_total_cost(),3)} API call to process."
     )
     cost_calculator.reset_total_cost()
-    if upload_count % 5 == 0 and upload_count != 0:
-        interval_deliver()
+    # if upload_count % 5 == 0 and upload_count != 0:
+    #     interval_deliver()
     upload_count += 1

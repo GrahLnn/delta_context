@@ -123,28 +123,23 @@ def align_due_sentences(texts, cache_path, words):
             words = make_words_equal(words, del_info)
             words = flatten_list(words)
             words = [w for w in words if w != {}]
-            # print(nwords[0:100])
-            with open("words_check.toml", "w", encoding="utf-8") as f:
-                data = {
-                    "a": ord_texts,
-                    "b": proc_texts,
-                    "c": " ".join([w["word"].strip() for w in words]),
-                    "diff": text,
-                    "operation": del_info,
-                    "words": ord_words,
-                    "time": datetime.now(),
-                }
-                toml.dump(data, f)
+            for w in words:
+                if not w.get("start"):
+                    print(w)
+                    raise ValueError("start not found")
+            # with open("words_check.toml", "w", encoding="utf-8") as f:
+            #     data = {
+            #         "a": text,
+            #         "b": del_info,
+            #         "c": words,
+            #     }
+            #     toml.dump(data, f)
         except Exception as e:
             # with open("words_check.toml", "w", encoding="utf-8") as f:
             #     data = {
-            #         "a": ord_texts,
-            #         "b": proc_texts,
-            #         "c": " ".join([w["word"].strip() for w in words]),
-            #         "diff": text,
-            #         "operation": del_info,
-            #         "words": ord_words,
-            #         "time": datetime.now(),
+            #         "a": text,
+            #         "b": del_info,
+            #         "c": words,
             #     }
             #     toml.dump(data, f)
             raise e

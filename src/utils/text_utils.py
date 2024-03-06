@@ -668,16 +668,22 @@ def make_tag_info(diff_markdown):
 
     for idx, op in enumerate(operations):
         if op["stage"] == "insert":
-            if idx != len(operations) - 1:
-                operations[idx]["id_str"] = " ".join(
-                    words[op["start_idx"] : operations[idx + 1]["start_idx"] - 1]
-                ).replace(f"<ins>{op['ins_text']}</ins>", "")
-            else:
-                operations[idx]["id_str"] = " ".join(words[op["start_idx"] :])
+            target = words[op["end_idx"] :]
+            # while len(target) < 10:
+            #     target = words[op["start_idx"] : operations[idx + 1]["start_idx"]]
+            target = " ".join(target)
+            # target = re.sub(r"<del>.*?<\/del>", "", target, flags=re.DOTALL)
+            target = re.sub(r"<ins>.*?<\/ins>", "", target, flags=re.DOTALL)
+            operations[idx]["id_str"] = (
+                target.replace("<ins>", "")
+                .replace("</ins>", "")
+                .replace("<del>", "")
+                .replace("</del>", "")
+            )
 
-    print(operations)
-    for op in operations:
-        print(words[op["start_idx"] : op["end_idx"]])
+    # print(operations)
+    # for op in operations:
+    #     print(words[op["start_idx"] : op["end_idx"]])
     ins_tags = re.finditer(r"<ins>.*?</ins>", diff_markdown)
     new_text = diff_markdown
     for tag in ins_tags:
@@ -703,7 +709,7 @@ def make_tag_info(diff_markdown):
     # import sys
 
     # sys.exit()
-    print(operations)
+    # print(operations)
     return operations
 
 
@@ -759,10 +765,26 @@ def make_words_equal(words, del_info):
             check_list = [w["word"].strip() for w in words]
             # print(id_str_list)
             # print(check_list)
+            from redlines import Redlines
+
+            diff = Redlines(
+                " ".join(check_list), " ".join(id_str_list), markdown_style="none"
+            )
+            # print(diff.output_markdown)
+            pattern = r"(<del>.*?</del>)|(<ins>.*?</ins>)"
+            matches = list(re.finditer(pattern, diff.output_markdown, re.DOTALL))
+            # print(matches)
+            if len(matches) > 1:
+                il, ir = matches[0].span()
+                iil, iir = matches[1].span()
+                item = diff.output_markdown[ir:iil]
+                print(item)
+                id_str_list = item.split()
             id_s_i, id_e_i = find_sublist_indices(id_str_list, check_list)
 
             # print(id_s_i, id_e_i)
-            n = nwords[id_s_i]
+            n = words[id_s_i]
+            # print("n", words[id_s_i])
 
             words_ins = []
             for string in info["ins_text"].split():
@@ -775,6 +797,17 @@ def make_words_equal(words, del_info):
     insert_tasks.sort(key=lambda x: x["s_idx"], reverse=True)
     # do insert
     for task in insert_tasks:
+        # print(task["s_idx"], task["words"])
         nwords.insert(task["s_idx"], task["words"])
-
+    # print(nwords)
     return nwords
+
+
+def insert_space_within_av_bv(text):
+    # 匹配 'av' 或 'bv'（不区分大小写），并在 a/b 和 v 之间插入空格
+    # 这里使用 (?i) 来忽略大小写
+    # 使用正则表达式的捕获组 () 来分别匹配 'a' 或 'b' 和 'v'
+    # 然后在替换字符串中通过引用这些捕获组 (\1 和 \2)，并在它们之间插入空格
+    pattern = r"(?i)(a|b)(v)"
+    replaced_text = re.sub(pattern, r"\1 \2", text)
+    return replaced_text

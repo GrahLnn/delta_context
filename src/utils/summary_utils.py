@@ -16,6 +16,7 @@ from typing import Optional
 from langcodes import Language
 from datetime import timedelta
 from dataclasses import dataclass
+from .text_utils import insert_space_within_av_bv
 
 _TRANSLATION_SYSTEM_PROMPT = """
 Given the following JSON object as shown below:
@@ -480,7 +481,7 @@ async def translate(
         raise Exception(
             f"translate, but chapter or summary empty, lang={lang}",
         )  # nopep8.
-
+    summary = insert_space_within_av_bv(summary)
     trans = Translation(
         lang=lang,
         chapter=chapter,

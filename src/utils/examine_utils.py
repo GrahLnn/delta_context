@@ -21,14 +21,35 @@ def examine_translates(seg_translates):
     return seg_translates
 
 
-def rebuild_result_sentences(result, seg_transcripts, seg_translates):
-    match_words_seg = result["word_segments"]
+def rebuild_result_sentences(
+    result, seg_transcripts: list[str], seg_translates: list[str]
+):
+    words = result["word_segments"]
     segments = []
     # print(len(seg_transcripts), len(seg_translates))
     for seg, tl in zip(seg_transcripts, seg_translates):
         # 更新 match_words_seg 并获取 data
         # print(seg, "\n", tl, "\n\n")
-        match_words_seg, data = generate_segments(seg, tl, match_words_seg)
+        # words, data = generate_segments(seg, tl, words)
+        seg_words = words[: len(seg.split())]
+        try:
+            words = words[len(seg.split()) :]
+        except IndexError:
+            pass
+        data = {
+            "start": seg_words[0]["start"],
+            "end": seg_words[-1]["end"],
+            "text": seg,
+            "translation": tl.replace("。", "")
+            .replace("，", " ")
+            .replace("`", "")
+            .replace("：", " ")
+            .replace("；", " ")
+            .replace(",", " ")
+            .strip(),
+            "words": seg_words,
+        }
+
         segments.append(data)
 
     result["segments"] = segments

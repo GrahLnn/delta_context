@@ -410,7 +410,7 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
     # for entry in driver.get_log("browser"):
     #     print("browser", entry)
     time.sleep(1)
-
+    try_count = 0
     try:
         wait.until(
             EC.presence_of_element_located(
@@ -421,7 +421,7 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
             )
         )
     except Exception:
-        try_count = 0
+
         while try_count < 3:
             try:
                 xpath = '//*[@class="geetest_item_wrap"]'
@@ -469,14 +469,14 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
                         -(X + x * lan_x), -(Y + y * lan_y)
                     ).perform()  # 将鼠标位置恢复到移动前
                     time.sleep(0.5)
-                driver.save_screenshot("screenshot.png")
+                # driver.save_screenshot("screenshot.png")
                 xpath = '//*[@class="geetest_commit_tip"]'
                 wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
 
                 time.sleep(1)
                 # xpath = "/html/body/div[4]/div[2]/div[6]/div/div/div[3]/div/a[2]"
                 # wait.until(EC.presence_of_element_located((By.XPATH, xpath))).click()
-                driver.save_screenshot("screenshot1.png")
+                # driver.save_screenshot("screenshot1.png")
                 WebDriverWait(driver, 60).until(
                     EC.presence_of_element_located(
                         (
@@ -498,8 +498,8 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
     save_cache(info, metadatapath)
 
     logs = driver.get_log("performance")
-    with open("bvid_msg_log.txt", "w") as f:
-        f.write(str(logs))
+    # with open("bvid_msg_log.txt", "w") as f:
+    #     f.write(str(logs))
     bvid_msgs = []
     for log in logs:
         if "bvid" in log["message"] and "aid" in log["message"]:

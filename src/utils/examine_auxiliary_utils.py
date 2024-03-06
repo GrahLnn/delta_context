@@ -1,6 +1,3 @@
-import sys
-
-
 def generate_segments(transcripts, translates, result_word_segments):
     words = transcripts.strip().split()
     previous_endtime = 0
