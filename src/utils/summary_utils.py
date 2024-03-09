@@ -236,7 +236,7 @@ async def _generate_chapters_one_by_one(
             # FIXME (Matthew Lee) prompt output as JSON may not work (in the end).
             res: dict = json.loads(content)
         except Exception:
-            print("generate one chapter failed")
+            print("chapters drained. done.")
             break  # drained.
 
         chapter = res.get("outline", "").strip()
@@ -244,7 +244,8 @@ async def _generate_chapters_one_by_one(
         end_at = res.get("end_at")
 
         # Looks like it's the end and meanless, so ignore the chapter.
-        if type(end_at) is not int:  # NoneType.
+        # if type(end_at) is not int:  # NoneType.
+        if not isinstance(end_at, int):
             print("generate one chapter, end_at is not int")
             break  # drained.
 
@@ -493,7 +494,7 @@ async def translate(
 
 
 async def get_summary_text(timed_texts):
-
+    print("get_summary_text")
     chapters = await summarize(
         timed_texts=timed_texts,
         lang="en",
@@ -507,7 +508,7 @@ async def get_summary_text(timed_texts):
             new_chapters[-1].summary += f"\n{c.summary}"
         else:
             new_chapters.append(c)
-
+    print("translate summary")
     # Do translate && rewrite the season title
     new_new_chapters = []
 
@@ -520,7 +521,7 @@ async def get_summary_text(timed_texts):
         new_new_chapters.append(
             {"chapter": tr.chapter, "summary": tr.summary, "start": tr.start}
         )
-
+    print("done summary")
     return new_new_chapters
 
 

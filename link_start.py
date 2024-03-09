@@ -393,9 +393,14 @@ while True:
             subtitle_json_file = f"{subtitle_path}/{clip_id}.json"
             subtitle_json = json.load(open(subtitle_json_file, "r"))
             timed_texts = get_timed_texts(subtitle_json)
-            summary = asyncio.run(get_summary_text(timed_texts))
-            info["summary"] = summary
-            save_cache(info, info_path)
+            if not info.get("summary"):
+                summary = asyncio.run(get_summary_text(timed_texts))
+                info["summary"] = summary
+                info["cost"] = f"${round(cost_calculator.get_total_cost(),3)}"
+                save_cache(info, info_path)
+            else:
+                summary = info.get("summary")
+
             print(
                 (
                     f"Done processing clip {idx+1} of {len(audio_clips)}. Starting next clip."
@@ -449,6 +454,7 @@ while True:
     minutes, seconds = divmod(elapsed_time.seconds, 60)
     formatted_time = f"{minutes:02}:{seconds:02}"
     time.sleep(0.5)
+
     print(
         f"Done processing `{fid}` from `{item.get('uploader')}`, a {round(audio_length_minutes,2)} minutes video, take {formatted_time} minute and ${round(cost_calculator.get_total_cost(),3)} API call to process."
     )

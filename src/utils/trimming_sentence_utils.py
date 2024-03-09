@@ -368,6 +368,23 @@ def separate_too_long_tl(seg_transcripts, seg_translates):
 
 
 def clean_sentences(seg_transcripts, seg_translates):
+    filtered_tcs = []
+    filtered_tls = []
+
+    for n, m in zip(seg_transcripts, seg_translates):
+        # 只有当n和m都非空时，才添加到新的列表中
+        if n != "" or m != "":
+            if n == "":
+                raise Exception("tcs has empty string")
+            elif m == "":
+                raise Exception("tls has empty string")
+            else:
+                filtered_tcs.append(n)
+                filtered_tls.append(m)
+
+    # 用过滤后的列表替换原列表
+    seg_transcripts = filtered_tcs
+    seg_translates = filtered_tls
     # 从后向前遍历列表
     for idx in range(len(seg_transcripts) - 2, -1, -1):
         current_len = len(seg_transcripts[idx].strip().split())
@@ -382,9 +399,7 @@ def clean_sentences(seg_transcripts, seg_translates):
             # 从列表中移除当前项
             seg_transcripts.pop(idx)
             seg_translates.pop(idx)
-    for idx, (seg_t, seg_l) in enumerate(
-        zip(tqdm(seg_transcripts, desc="clean sentences"), seg_translates)
-    ):
+    for idx, (seg_t, seg_l) in enumerate(zip(seg_transcripts, seg_translates)):
         seg_transcripts[idx] = seg_t.strip().replace("  ", " ")
 
         seg_translates[idx] = seg_l.strip().replace("  ", " ")

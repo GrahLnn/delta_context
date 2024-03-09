@@ -394,15 +394,18 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
             )
         )
     )
-
-    WebDriverWait(driver, 600).until(
-        EC.presence_of_element_located(
-            (
-                By.XPATH,
-                "//span[@class='success' and contains(text(), '上传完成')]",
+    try:
+        WebDriverWait(driver, 3600).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//span[@class='success' and contains(text(), '上传完成')]",
+                )
             )
         )
-    )
+    except Exception:
+        driver.save_screenshot("upload_screenshot.png")
+        raise ValueError("upload failed")
     driver.find_element(
         By.XPATH,
         "//span[@class='submit-add' and contains(text(), '立即投稿')]",

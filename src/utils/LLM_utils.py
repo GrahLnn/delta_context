@@ -295,11 +295,11 @@ def chat_complation(headers, payload, MAX_RETRY=5):
             # make a POST request to the API endpoint, stream=False
             sleep_time = 1
             while not checker.can_execute_request():
-                print(
-                    f"Network unstable, waiting...{sleep_time}s",
-                    end="\r",
-                    flush=True,
-                )
+                # print(
+                #     f"Network unstable, waiting...{sleep_time}s",
+                #     end="\r",
+                #     flush=True,
+                # )
                 time.sleep(1)
                 sleep_time += 1
             endpoint = "https://api.openai.com/v1/chat/completions"
