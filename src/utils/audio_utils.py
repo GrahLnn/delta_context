@@ -264,27 +264,76 @@ def extract_vocal(audio_path, output_path, output_name):
     # shutil.rmtree(f"{output_path}/split_seg")
     flag = [True]
     desc = ["clean speaker"]
-
+    out_path = f"{output_path}/clean_speaker"
     try:
         print_status(flag, desc)
-        infer(
-            audio_path,
-            f"{output_path}/clean_speaker",
-            "asset/model/MDX23C-8KFFT-InstVoc_HQ.ckpt",
-            "asset/model/UVR-DeNoise-Lite.pth",
-            "asset/model/UVR-DeEcho-DeReverb.pth",
-            process_data,
-        )
-        desc[0] = "vad clean"
-        # vad_clean(
-        #     f"{output_path}/clean_speaker/1_1_(Vocals).wav",
-        #     output_path,
-        #     output_name,
-        # )
-        shutil.copy(
-            f"{output_path}/clean_speaker/1_1_(Vocals).wav",
-            f"{output_path}/{output_name}.wav",
-        )
+        audio = AudioSegment.from_file(audio_path)
+        duration_hours = audio.duration_seconds / 60 / 60
+        segment_duration_ms = 3600000
+        part_list = []
+        os.makedirs(f"{output_path}/split_stream", exist_ok=True)
+        if duration_hours > 3:
+
+            # 分割音频
+            parts = len(audio) // segment_duration_ms
+            for i in range(parts + 1):
+                # 计算当前片段的开始和结束位置
+                start = i * segment_duration_ms
+                end = start + segment_duration_ms
+
+                # 防止超出音频长度
+                if end > len(audio):
+                    end = len(audio)
+
+                # 提取音频片段
+                segment = audio[start:end]
+
+                # 保存音频片段
+                save_path = f"{output_path}/split_stream/part_{i+1}.wav"
+                segment.export(save_path, format="wav")
+                part_list.append(save_path)
+
+        else:
+            shutil.copy(audio_path, f"{output_path}/split_stream/part_1.wav")
+            part_list.append(f"{output_path}/split_stream/part_1.wav")
+
+        clean_list = []
+        for i, part in enumerate(part_list):
+            infer(
+                part,
+                out_path,
+                "asset/model/MDX23C-8KFFT-InstVoc_HQ.ckpt",
+                "asset/model/UVR-DeNoise-Lite.pth",
+                "asset/model/UVR-DeEcho-DeReverb.pth",
+                process_data,
+            )
+            # rename the file
+            os.rename(
+                f"{out_path}/1_1_(Vocals).wav",
+                f"{out_path}/{i+1}(Vocals).wav",
+            )
+            clean_list.append(f"{out_path}/{i+1}(Vocals).wav")
+            desc[0] = (
+                f"clean speaker part {i+1}" if len(part_list) > 1 else "clean speaker"
+            )
+        if len(clean_list) == 1:
+            shutil.copy(
+                clean_list[0],
+                f"{output_path}/{output_name}.wav",
+            )
+        else:
+            combined = AudioSegment.from_wav(clean_list[0])
+
+            # 遍历剩下的音频文件并将它们追加到第一个文件之后
+            for file in clean_list[1:]:
+                next_audio = AudioSegment.from_wav(file)
+                combined += next_audio
+            combined.export(
+                f"{output_path}/{output_name}.wav",
+                format="wav",
+            )
+            # 删除split_stream文件夹
+        shutil.rmtree(f"{output_path}/split_stream")
         flag[0] = False
     except Exception as e:
         flag[0] = False

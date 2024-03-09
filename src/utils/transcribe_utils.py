@@ -55,7 +55,7 @@ def transcribe_with_whisper(audio_file, timestamps=False):
             compression_ratio_threshold=1.5,
             fp16=False,
             verbose=None,
-            # language="en",
+            language="en",
             # temperature=0,
         )
 

@@ -367,7 +367,7 @@ def chat_complation(headers, payload, MAX_RETRY=5):
         if "role" in delta:
             continue
         if "content" in delta:
-            print(delta["content"], end="", flush=True)
+            # print(delta["content"], end="", flush=True)
             result += delta["content"]
 
         else:
@@ -387,7 +387,7 @@ def predict_no_ui_long_connection(
     sys_prompt="",
     history=[],
     json_output=False,
-    model="gpt-3.5-turbo-0125 ",
+    model="gpt-3.5-turbo-0125",
     temperature=0,
 ):
     """
@@ -404,7 +404,7 @@ def predict_no_ui_long_connection(
         用于负责跨越线程传递已经输出的部分，大部分时候仅仅为了fancy的视觉效果，留空即可。observe_window[0]：观测窗。observe_window[1]：看门狗
     """
     if model == "gpt-4":
-        model = "gpt-4-0125-preview"
+        model = "gpt-3.5-turbo-0125"
 
     headers, payload = generate_payload(
         inputs,

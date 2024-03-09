@@ -11,6 +11,7 @@ from .list_utils import flatten_list
 from difflib import SequenceMatcher
 from asset.env.env import target_language
 from tqdm import tqdm
+import time
 
 
 def replace_term(text, known_value, replacement):  # text uitls
@@ -49,7 +50,30 @@ def translate_text(val):
     # }"""
 
     #     response = get_completion(f'"{val}"', sys_prompt, json_output=True)
-    prompt = f"""请将以下两个句子分割成多个独特的部分。句子应根据自然的语法或语义断点（如逗号、句号、连接词）进行分割。对于包含重复短语或中断的部分，如“I I'll be I Yeah. Thanks very much everyone. Thank you.”，应将其视为一个整体进行处理，以保持语义上的连贯性。如果两个语言版本的分割部分数量不一致，请调整较长的部分以匹配较短的部分。这意味着，如果一个语言版本的句子被分割成更多的部分，您需要将这些额外的部分合并，以确保每对 `sentence1` 和 `sentence2` 在数量和语义上相匹配，从而避免重复或空缺。在这个任务中，目标是保持原文的意义和结构，同时在适当的位置进行分割，以确保两种语言之间的对应关系清晰明确且意义一致。
+    sys_prompt = """Given the following JSON object as shown below:
+
+```json
+{
+    "segment_pairs": [{
+        "sentence_seg": "...",
+        "sentence_zh-Hans": "..."
+        }]
+}
+```
+
+And reference for some terminology translations below:
+
+```
+In the context of music, "suspension" should be translated as "延留音".
+When "work" is used as a noun, it should be translated as "成果".
+```
+
+Divide the user input sentence into multiple parts (put in sentence_seg filed) and translate it to Simplified Chinese and put in sentence_zh-Hans filed,
+the translation should keep the same format as the original field.
+
+Notice every sentence part should be TRANSLATE! And remove characters that are irrelevant to the meaning of the sentence.
+"""
+    prompt = f"""请将以下两个句子分割成多个独特的部分。句子应根据自然的语法或语义断点（如逗号、句号、连接词）进行分割。对于包含重复短语或中断的部分，如“I I'll be I Yeah. Thanks very much everyone. Thank you.”，应将其视为一个整体进行处理，以保持语义上的连贯性。如果两个语言版本的分割部分数量不一致，请调整较长的部分以匹配较短的部分。这意味着，如果一个语言版本的句子被分割成更多的部分，您需要将这些额外的部分合并，以确保每对 `sentence1` 和 `sentence2` 在数量和语义上相匹配，从而避免重复或空缺。在这个任务中，目标是在适当的位置进行分割，以确保两种语言之间的对应关系清晰明确且意义一致。
 
 ## 用English to 简体中文作示例
 user：There are years that ask questions and years that answer.
@@ -67,11 +91,12 @@ you：
 2. [Translate from sentence 1 in line with the Chinese expression habits]
 
 请确保每个分割后的部分在 JSON 数组中都有唯一的对应条目，并保持句子的原始顺序。然后放在以下JSON格式里：
-"segment_pairs": [
+{{"segment_pairs": [
     {{
         "sentence1": "corresponding part from the 英文原句",
         "sentence2": "corresponding part from the 中文意译"
     }}
+]}}
 """
     #     prompt = f"""请将以下两个句子分割成多个独特的部分。句子应根据自然的语法或语义断点（如逗号、句号、连接词）进行分割。对于包含重复短语或中断的部分，如“I I'll be I Yeah. Thanks very much everyone. Thank you.”，应将其视为一个整体进行处理，以保持语义上的连贯性。并毫无保留地按照中文习惯将其翻译为中文
 
@@ -87,7 +112,9 @@ you：
     #         "sentence2": "sentence1的翻译对应"
     #     }}]
     # """
-    response = get_completion(prompt, json_output=True, temperature=1)
+    response = get_completion(
+        val, sys_prompt=sys_prompt, json_output=True, temperature=1
+    )
     # print(response)
     parsed_json = json.loads(response)
 
@@ -108,14 +135,37 @@ def ask_LLM_to_translate(texts):
         # print(val)
         if not transcript.strip():
             continue
-        response = translate_text(transcript)
-        tcs = [d["sentence1"] for d in response["segment_pairs"]]
-        tls = [d["sentence2"] for d in response["segment_pairs"]]
+        try_count = 0
+        while try_count < 3:
+            try:
+                response = translate_text(transcript)
+                break
+            except Exception as e:
+                print(e)
+                try_count += 1
+                time.sleep(60)
+                if try_count == 3:
+                    raise Exception(f"Failed to translate {transcript} after 3 tries")
+        tcs = [d["sentence_seg"] for d in response["segment_pairs"]]
+        tls = [d["sentence_zh-Hans"] for d in response["segment_pairs"]]
 
-        if "" in tcs:
-            print(tcs)
-            print("has empty")
-            sys.exit()
+        filtered_tcs = []
+        filtered_tls = []
+
+        for n, m in zip(tcs, tls):
+            # 只有当n和m都非空时，才添加到新的列表中
+            if n != "" or m != "":
+                if n == "":
+                    raise Exception("tcs has empty string")
+                elif m == "":
+                    raise Exception("tls has empty string")
+                else:
+                    filtered_tcs.append(n)
+                    filtered_tls.append(m)
+
+        # 用过滤后的列表替换原列表
+        tcs = filtered_tcs
+        tls = filtered_tls
 
         # print(response)
 

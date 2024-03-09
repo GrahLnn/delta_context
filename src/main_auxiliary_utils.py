@@ -3,6 +3,7 @@ from src.utils.transcribe_utils import (
     transcribe_with_whisper,
     merge_if_not_period,
     find_closest_stamps,
+    concatenate_sentences_punc_end,
 )
 from src.utils.translate_utils import ask_LLM_to_translate
 from src.utils.text_utils import (
@@ -11,7 +12,6 @@ from src.utils.text_utils import (
     make_tag_info,
 )
 from src.utils.trimming_sentence_utils import (
-    concatenate_sentences_punc_end,
     split_stage_one,
     split_stage_two,
     separate_too_long_tl,
@@ -43,6 +43,9 @@ import string
 from bilibili_api import sync
 from src.utils.video_comment import comment_tasks, thread_lock
 import httpx
+from .utils.LLM_utils import get_completion
+from .utils.text_utils import split_sentence_with_ratio
+import json
 
 
 def download_extract(item):
@@ -215,55 +218,53 @@ def align_due_sentences(texts, cache_path, words):
     print(f'length check: {len(words)}/{len(" ".join(transcripts).split())}')
     if len(words) != len(" ".join(transcripts).split()):
         raise ValueError("transcripts and words not equal")
-
     if len(transcripts) != len(translates):
         raise ValueError("transcripts and translates not equal")
+    # result = get_or_cache(
+    #     f"{cache_path}/split_stage_two.toml",
+    #     lambda: compute_separated_sentences(transcripts, translates),
+    # )
+    # seg_transcripts, seg_translates = (
+    #     result["seg_transcripts"],
+    #     result["seg_translates"],
+    # )
+    # if len(seg_transcripts) != len(seg_translates):
+    #     raise ValueError("seg_transcripts and seg_translates not equal")
 
-    result = get_or_cache(
-        f"{cache_path}/split_stage_two.toml",
-        lambda: compute_separated_sentences(transcripts, translates),
-    )
-    seg_transcripts, seg_translates = (
-        result["seg_transcripts"],
-        result["seg_translates"],
-    )
-    if len(seg_transcripts) != len(seg_translates):
-        raise ValueError("seg_transcripts and seg_translates not equal")
+    # three_transcripts = copy.deepcopy(seg_transcripts)
 
-    three_transcripts = copy.deepcopy(seg_transcripts)
+    # words = check_words_equal(
+    #     " ".join(two_transcripts), " ".join(three_transcripts), words
+    # )
+    # print(f'length check: {len(words)}/{len(" ".join(seg_transcripts).split())}')
+    # if len(words) != len(" ".join(seg_transcripts).split()):
+    #     raise ValueError("transcripts and words not equal")
 
-    words = check_words_equal(
-        " ".join(two_transcripts), " ".join(three_transcripts), words
-    )
-    print(f'length check: {len(words)}/{len(" ".join(seg_transcripts).split())}')
-    if len(words) != len(" ".join(seg_transcripts).split()):
-        raise ValueError("transcripts and words not equal")
+    # result = get_or_cache(
+    #     f"{cache_path}/split_stage_three.toml",
+    #     lambda: compute_separated_long_tl(seg_transcripts, seg_translates),
+    # )
+    # seg_transcripts, seg_translates = (
+    #     result["seg_transcripts"],
+    #     result["seg_translates"],
+    # )
+    # if len(seg_transcripts) != len(seg_translates):
+    #     raise ValueError("seg_transcripts and seg_translates not equal")
 
-    result = get_or_cache(
-        f"{cache_path}/split_stage_three.toml",
-        lambda: compute_separated_long_tl(seg_transcripts, seg_translates),
-    )
-    seg_transcripts, seg_translates = (
-        result["seg_transcripts"],
-        result["seg_translates"],
-    )
-    if len(seg_transcripts) != len(seg_translates):
-        raise ValueError("seg_transcripts and seg_translates not equal")
+    # fourth_transcripts = copy.deepcopy(seg_transcripts)
 
-    fourth_transcripts = copy.deepcopy(seg_transcripts)
-
-    words = check_words_equal(
-        " ".join(three_transcripts),
-        " ".join(fourth_transcripts),
-        words,
-    )
-    print(f'length check: {len(words)}/{len(" ".join(seg_transcripts).split())}')
-    if len(words) != len(" ".join(seg_transcripts).split()):
-        raise ValueError("transcripts and words not equal")
+    # words = check_words_equal(
+    #     " ".join(three_transcripts),
+    #     " ".join(fourth_transcripts),
+    #     words,
+    # )
+    # print(f'length check: {len(words)}/{len(" ".join(seg_transcripts).split())}')
+    # if len(words) != len(" ".join(seg_transcripts).split()):
+    #     raise ValueError("transcripts and words not equal")
 
     result = get_or_cache(
         f"{cache_path}/clean_sentences.toml",
-        lambda: compute_clean_sentences(seg_transcripts, seg_translates),
+        lambda: compute_clean_sentences(transcripts, translates),
     )
     seg_transcripts, seg_translates = (
         result["seg_transcripts"],
@@ -274,7 +275,7 @@ def align_due_sentences(texts, cache_path, words):
 
     fifth_transcripts = copy.deepcopy(seg_transcripts)
     words = check_words_equal(
-        " ".join(fourth_transcripts),
+        " ".join(two_transcripts),
         " ".join(fifth_transcripts),
         words,
     )
@@ -283,6 +284,50 @@ def align_due_sentences(texts, cache_path, words):
     if len(words) != len(" ".join(seg_transcripts).split()):
         raise ValueError("transcripts and words not equal")
 
+    # new_transcripts = []
+    # new_translates = []
+    # for tc, tl in zip(seg_transcripts, seg_translates):
+    #     chinese_characters = len(re.findall(r"[\u4e00-\u9fff]", tl))
+    #     if chinese_characters > 26:
+    #         prompt = f'请将以下句子分割成多个独特的部分。然后放在一个字段为"part_list"的JSON数组里：\n"""{tl}"""'
+    #         llm_answer = get_completion(prompt, json_output=True)
+    #         la_combined = json.loads(llm_answer)["part_list"]
+
+    #         new_la_combined = []
+
+    #         idx = 0
+    #         while idx < len(la_combined):
+    #             text = la_combined[idx]
+    #             text = str(text)
+
+    #             # 如果文本包含少于或等于两个中文字符，并且不是最后一个元素
+    #             if (
+    #                 len(re.findall(r"[\u4e00-\u9fff]", text)) <= 2
+    #                 and len(re.findall(r"[\u4e00-\u9fff]", text)) != 0
+    #                 and idx < len(la_combined) - 1
+    #             ):
+    #                 # 合并当前文本和下一个文本
+    #                 new_la_combined.append(text + la_combined[idx + 1])
+    #                 idx += 2  # 跳过下一个元素，因为它已经被合并
+    #             elif (
+    #                 len(re.findall(r"[\u4e00-\u9fff]", text)) <= 2
+    #                 and len(re.findall(r"[\u4e00-\u9fff]", text)) != 0
+    #                 and idx == len(la_combined) - 1
+    #             ):
+    #                 new_la_combined[-1] += text
+    #                 idx += 1
+    #             else:
+    #                 # 如果文本不满足合并条件，或者是最后一个元素，直接添加到新列表中
+    #                 new_la_combined.append(text)
+    #                 idx += 1
+
+    #         seg_tl = new_la_combined
+    #         seg_tc = split_sentence_with_ratio(seg_tl, tc)
+    #         new_translates.extend(seg_tl)
+    #         new_transcripts.extend(seg_tc)
+    #     else:
+    #         new_translates.append(tl)
+    #         new_transcripts.append(tc)
     return seg_transcripts, seg_translates, words
 
 

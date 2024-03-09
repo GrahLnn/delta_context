@@ -67,12 +67,6 @@ try:
 except Exception:
     checker.start()
 
-# video_datas = [
-#     {
-#         "url": "https://www.youtube.com/watch?v=5j05RWh1ypk",
-#         "uploader": "@CppCon",
-#     }
-# ]
 
 try:
     httpx.post("http://127.0.0.1:5000/detect")
@@ -118,7 +112,15 @@ if os.path.exists("cache/delivery_videos.toml"):
     # asyncio.run(deliver_and_save_completion(delivery_videos, credential))
     # interval_deliver()
 
-
+limit = None
+addition = [
+    # {
+    #     "url": "https://www.youtube.com/watch?v=hbo98xNLzog",
+    #     "uploader": "@CppCon",
+    # }
+]
+channel_filter = []
+playlist_filter = ["Flutter Package of the Week", "Flutter Widget of the Week"]
 # TODO 实现全局一致的名词翻译，多说话人盲源分离
 # interval_deliver()
 refrash_list = False
@@ -128,15 +130,6 @@ while True:
     if refrash_list and now > morning_8 + datetime.timedelta(days=1):
         refrash_list = False
     if not refrash_list:
-        limit = None
-        addition = [
-            # {
-            #     "url": "https://www.youtube.com/watch?v=5j05RWh1ypk",
-            #     "uploader": "@CppCon",
-            # }
-        ]
-        channel_filter = []
-        playlist_filter = ["Flutter Package of the Week", "Flutter Widget of the Week"]
 
         video_datas = get_all_video_urls(force_update=False)
 

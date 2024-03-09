@@ -45,7 +45,6 @@ def rebuild_result_sentences(
             .replace("`", "")
             .replace("：", " ")
             .replace("；", " ")
-            .replace(",", " ")
             .strip(),
             "words": seg_words,
         }

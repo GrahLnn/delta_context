@@ -1,42 +1,8 @@
-import re, os, sys, json, ast, spacy, string, inflect
-from .LLM_utils import get_completion, gpt2pair
-from tqdm import tqdm
-from itertools import zip_longest
+import inflect
 
-from asset.env.env import target_language
-from .text_utils import (
-    replace_comma_in_brackets,
-    back_to_comma,
-    count_words,
-    most_similar,
-    longest_common_substring,
-    similarity_score,
-    split_sentence_with_ratio,
-    parse_translate_string,
-    escape_inner_quotes,
-    escape_inner_quotes_list,
-    any_contains_chinese,
-    append_missing_words_to_array,
-    fix_last_n_char,
-    check_and_fix_sentence,
-    extract_right_parts,
-)
-from .list_utils import (
-    flatten_list,
-    get_sequence_indices,
-    is_sequence_increasing,
-    remove_overlap,
-    fix_sequences,
-    get_sequence_overlap,
-    make_over_notion,
-    fix_overlap,
-    split_string_around_substring,
-)
-from .trimming_sentence_auxiliary_utils import *
-from .transcribe_utils import (
-    concatenate_sentences_punc_end,
-    concatenate_sentences_en_end,
-)
+from tqdm import tqdm
+
+from .trimming_sentence_auxiliary_utils import split_sentence, split_stage
 
 
 def split_stage_one(transcripts, translates):
@@ -102,7 +68,7 @@ def split_stage_one(transcripts, translates):
     #         )
     #     ]
     # sys.exit(1)
-    return split_stage(transcripts, translates, "split to small part")
+    return split_sentence(transcripts, translates)
 
 
 def split_stage_two(transcripts, translates):
@@ -274,7 +240,7 @@ def split_stage_two(transcripts, translates):
 def get_pair(a, b):
     try:
         pair = dict(zip(a, b))
-    except:
+    except Exception:
         print(a)
         print(b)
     return pair

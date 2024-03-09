@@ -16,6 +16,8 @@ from .text_utils import (
 )
 from .LLM_utils import get_completion
 from tqdm import tqdm
+import math
+from .status_utils import create_progress_bar
 
 
 def check_pair(pair):
@@ -138,6 +140,124 @@ def split_by_LLM(transcript, translate, model="gpt-3.5-turbo-0125"):
     return parsed_json
 
 
+def total_char_count(text):
+    chinese_characters = len(re.findall(r"[\u4e00-\u9fff]", text))
+    other_char = len(re.findall(r"[A-Za-z0-9]", text))
+    total_count = chinese_characters + math.ceil(other_char / 2)
+    return total_count
+
+
+def split_sentence(transcripts: list[str], translates: list[str]):
+    TARGET_LEN = 28
+    # print(len(transcripts), len(translates))
+    # for i, (transcript, translate) in enumerate(zip(transcripts, translates)):
+
+    #     total_count = total_char_count(translate)
+    #     if total_count > TARGET_LEN:
+    #         if "，" in translate:
+    #             seg_tl = translate.split("，")
+    #             seg_tc = transcript.split(", ")
+    #             if len(seg_tc) == len(seg_tl):
+    #                 # seg_tc = [
+    #                 #     item + "，" if idx < len(seg_tc) - 1 else item
+    #                 #     for idx, item in enumerate(seg_tc)
+    #                 # ]
+    #                 # seg_tl = [
+    #                 #     item + ", " if idx < len(seg_tl) - 1 else item
+    #                 #     for idx, item in enumerate(seg_tl)
+    #                 # ]
+    #                 transcripts[i] = seg_tc
+    #                 translates[i] = seg_tl
+    # transcripts, translates = flatten_list(transcripts), flatten_list(translates)
+    # print(len(transcripts), len(translates))
+    count = 0
+    while True:
+        modified = False
+
+        bar = create_progress_bar(count / len(transcripts))
+        print(
+            f"\rsplit: {bar} {count}/{len(transcripts)}|{(count / len(transcripts)*100):.2f}%",
+            end="",
+        )
+        for i, (transcript, translate) in enumerate(zip(transcripts, translates)):
+            if i > count:
+                count = i
+            total_count = total_char_count(translate)
+            if total_count > TARGET_LEN:
+                prompt = f'Please split the following sentence into multiple sentences. Do not add any characters. Then put them in a JSON array with a field named "part_list":\n"""{translate}"""'
+                llm_answer = get_completion(prompt, json_output=True)
+                la_combined = json.loads(llm_answer)["part_list"]
+                if len(la_combined) == 1:
+                    prompt = f'将这句话分成两个均匀部分，不补充任何字符。然后放在一个字段为"part_list"的JSON数组里：\n"{translate}"'
+                    llm_answer = get_completion(prompt, json_output=True)
+                    la_combined = json.loads(llm_answer)["part_list"]
+
+                new_la_combined = []
+
+                idx = 0
+                while idx < len(la_combined):
+                    text = la_combined[idx]
+                    text = str(text)
+
+                    # 如果文本包含少于或等于两个中文字符，并且不是最后一个元素
+                    if (
+                        len(re.findall(r"[\u4e00-\u9fff]", text)) <= 2
+                        and len(re.findall(r"[\u4e00-\u9fff]", text)) != 0
+                        and idx < len(la_combined) - 1
+                    ):
+                        # 合并当前文本和下一个文本
+                        new_la_combined.append(text + la_combined[idx + 1])
+                        idx += 2  # 跳过下一个元素，因为它已经被合并
+                    elif (
+                        len(re.findall(r"[\u4e00-\u9fff]", text)) <= 2
+                        and len(re.findall(r"[\u4e00-\u9fff]", text)) != 0
+                        and idx == len(la_combined) - 1
+                    ):
+                        new_la_combined[-1] += text
+                        idx += 1
+                    else:
+                        # 如果文本不满足合并条件，或者是最后一个元素，直接添加到新列表中
+                        new_la_combined.append(text)
+                        idx += 1
+
+                if len(new_la_combined) == 1:
+                    prompt = f'将这句话分成两个均匀部分，不补充任何字符。然后放在一个字段为"part_list"的JSON数组里：\n"{translate}"'
+                    llm_answer = get_completion(prompt, json_output=True)
+                    new_la_combined = json.loads(llm_answer)["part_list"]
+
+                new_la = new_la_combined
+                # current_length = 0
+                # for idx, la in enumerate(new_la_combined):
+                #     len_count = total_char_count(la)
+                #     if current_length + len_count > TARGET_LEN:
+                #         new_la.append("".join(new_la_combined[:idx]))
+                #         new_la_combined = new_la_combined[idx:]
+                #         current_length = 0
+                #     current_length += len_count
+                # if new_la_combined:
+                #     new_la.append("".join(new_la_combined))
+
+                transcripts[i] = split_sentence_with_ratio(new_la, transcript)
+                translates[i] = new_la
+                # print()
+                # print(transcripts[i])
+                # print(translates[i])
+                modified = True
+                transcripts, translates = flatten_list(transcripts), flatten_list(
+                    translates
+                )
+
+                break
+
+        if not modified:
+            break
+    datas = [
+        {"transcript": tc, "translation": tl}
+        for tc, tl in zip(flatten_list(transcripts), flatten_list(translates))
+    ]
+    return transcripts, translates, datas
+
+
 def split_stage(transcripts, translates, desc):
     seg_transcripts = []
     seg_translates = []
@@ -147,7 +267,7 @@ def split_stage(transcripts, translates, desc):
     ):
         chinese_characters = len(re.findall(r"[\u4e00-\u9fff]", translate))
 
-        if chinese_characters > 24:
+        if chinese_characters > 26:
             parsed_json = split_by_LLM(transcript, translate)
             # print(transcript)
             # print(translate)
@@ -216,8 +336,40 @@ def split_stage(transcripts, translates, desc):
                         == transcript.strip(string.punctuation).strip()
                     ):
                         print("1")
-                        seg_tc.pop(idx)
-                        seg_tl.pop(idx)
+                        prompt = f'请将以下句子分割成多个独特的部分。然后放在一个字段为"part_list"的JSON数组里：\n"""{translate}"""'
+                        llm_answer = get_completion(prompt, json_output=True)
+                        la_combined = json.loads(llm_answer)["part_list"]
+
+                        new_la_combined = []
+
+                        idx = 0
+                        while idx < len(la_combined):
+                            text = la_combined[idx]
+                            text = str(text)
+
+                            # 如果文本包含少于或等于两个中文字符，并且不是最后一个元素
+                            if (
+                                len(re.findall(r"[\u4e00-\u9fff]", text)) <= 2
+                                and len(re.findall(r"[\u4e00-\u9fff]", text)) != 0
+                                and idx < len(la_combined) - 1
+                            ):
+                                # 合并当前文本和下一个文本
+                                new_la_combined.append(text + la_combined[idx + 1])
+                                idx += 2  # 跳过下一个元素，因为它已经被合并
+                            elif (
+                                len(re.findall(r"[\u4e00-\u9fff]", text)) <= 2
+                                and len(re.findall(r"[\u4e00-\u9fff]", text)) != 0
+                                and idx == len(la_combined) - 1
+                            ):
+                                new_la_combined[-1] += text
+                                idx += 1
+                            else:
+                                # 如果文本不满足合并条件，或者是最后一个元素，直接添加到新列表中
+                                new_la_combined.append(text)
+                                idx += 1
+
+                        seg_tl = new_la_combined
+                        seg_tc = split_sentence_with_ratio(seg_tl, transcript)
                         modified = True
                         break
 

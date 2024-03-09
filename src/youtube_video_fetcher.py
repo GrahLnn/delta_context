@@ -197,8 +197,7 @@ def make_videos(channel, videos_data):
 
                                 if len(ans) > 20:
                                     ans = get_completion(
-                                        f"用中文精炼`{ans}`标题并约束在20个字符内",
-                                        model="gpt-4",
+                                        f"用三个中文词语精炼`{ans}`这个标题",
                                     )
                                     ans = clean_ans(ans)
 
@@ -222,7 +221,7 @@ def update_video_urls():
 
     playlist_info = "cache/playlist_info.json"
     if os.path.exists(playlist_info):
-        with open(playlist_info, "r", encoding="") as json_file:
+        with open(playlist_info, "r", encoding="utf-8") as json_file:
             videos_data = json.load(json_file)
     else:
         videos_data = {}
