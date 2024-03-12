@@ -155,8 +155,9 @@ def comment_summary_to_video():
                 print("Error sending summary", task["bvid"], send_error)
                 # 更新任务时间并重新放回列表
                 task["time"] = datetime.now().timestamp()
-                with thread_lock:
-                    comment_tasks.append(task)
+                if "12051" not in str(send_error):
+                    with thread_lock:
+                        comment_tasks.append(task)
 
         except Exception as e:
             print("Error processing task", task["bvid"], "Error:", e)

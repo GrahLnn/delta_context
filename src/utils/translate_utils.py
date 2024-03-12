@@ -113,7 +113,7 @@ you：
     #     }}]
     # """
     response = get_completion(
-        val, sys_prompt=sys_prompt, json_output=True, temperature=1
+        f'"{val}"', sys_prompt=sys_prompt, json_output=True, temperature=1
     )
     # print(response)
     parsed_json = json.loads(response)
@@ -139,15 +139,21 @@ def ask_LLM_to_translate(texts):
         while try_count < 3:
             try:
                 response = translate_text(transcript)
+                tcs = [d["sentence_seg"] for d in response["segment_pairs"]]
+                tls = [d["sentence_zh-Hans"] for d in response["segment_pairs"]]
+                if len(" ".join(tcs)) / len(transcript) < 0.5:
+                    raise Exception(
+                        f"Transcribe not equal\n{transcript}\n{' '.join(tcs)}"
+                    )
                 break
             except Exception as e:
-                print(e)
+                # print(e)
                 try_count += 1
-                time.sleep(60)
+                time.sleep(10)
                 if try_count == 3:
-                    raise Exception(f"Failed to translate {transcript} after 3 tries")
-        tcs = [d["sentence_seg"] for d in response["segment_pairs"]]
-        tls = [d["sentence_zh-Hans"] for d in response["segment_pairs"]]
+                    raise Exception(
+                        f"Failed to translate {transcript} after 3 tries: {e}"
+                    )
 
         filtered_tcs = []
         filtered_tls = []

@@ -29,7 +29,7 @@ def make_delivery_info(title, video_path, thumbnail_path, tags, desc, tid, url, 
 {{
     "tag": [你的翻译]
 }}"""
-        print(prompt)
+        # print(prompt)
         ans = get_completion(prompt, json_output=True)
         json_ans: dict = json.loads(ans)
         translate_tags.append(list(json_ans.values())[0])

@@ -1,4 +1,10 @@
-import toml, os, yt_dlp, time, random, sys, threading
+import toml
+import os
+import yt_dlp
+import time
+import random
+import sys
+import threading
 from .utils.list_utils import flatten_list
 from src.utils.cache_utils import load_channels, load_cache
 from tqdm import tqdm
@@ -6,6 +12,10 @@ from .utils.LLM_utils import get_completion
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .utils.status_utils import countdown
 import json
+from .utils.video_utils import loggerOutputs
+
+ord_videos = []
+ord_urls = []
 
 
 def extract_url_info(url):
@@ -20,9 +30,15 @@ def extract_url_info(url):
 
     while True:
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                result = ydl.extract_info(url, download=False)
-                return [url, int(result["upload_date"])]
+            if url in ord_urls:
+                ordidx = ord_urls.index(url)
+                return [url, ord_videos[ordidx]["upload_time"]]
+            else:
+                print(f"Extracting info for {url}...")
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    result = ydl.extract_info(url, download=False)
+                    print([url, int(result["upload_date"])], "\n")
+                    return [url, int(result["upload_date"])]
 
         except Exception as e:
             if "This live event will begin in" in str(e):
@@ -51,20 +67,6 @@ def process_urls(urls):
     return urls_date
 
 
-class loggerOutputs:
-    def error(msg):
-        # print("Captured Error: " + msg)
-        pass
-
-    def warning(msg):
-        # print("Captured Warning: " + msg)
-        pass
-
-    def debug(msg):
-        # print("Captured Log: " + msg)
-        pass
-
-
 def get_video_urls(channel_name, choose_type="all"):
     """获取单一频道的所有视频URLs
 
@@ -76,7 +78,7 @@ def get_video_urls(channel_name, choose_type="all"):
         "quiet": True,
         "extract_flat": True,
         "force_generic_extractor": True,
-        "logger": loggerOutputs,
+        # "logger": loggerOutputs,
         # "no_warnings": True,
         # "ignoreerrors": True,  # 忽略错误
     }
@@ -135,16 +137,43 @@ def get_playlists(uploader_id):
             # save_cache(result_playlist, "cache/channel_info.toml")
 
             # 遍历并打印出所有找到的播放列表信息
-            for playlist in result_playlist["entries"]:
-                result_videos = ydl.extract_info(playlist.get("url"), download=False)
-                videos = [item.get("url") for item in result_videos["entries"]]
-                data = {
-                    "title": playlist.get("title"),
-                    "url": playlist.get("url"),
-                    "id": playlist.get("id"),
-                    "videos": videos,
+            # print(result_playlist["entries"])
+            def extract_playlist_info(playlist):
+                try:
+                    # 假设ydl是预先配置好的，如果每个线程需要独立实例，则应在这里创建
+                    result_videos = ydl.extract_info(
+                        playlist.get("url"), download=False
+                    )
+                    videos = [item.get("url") for item in result_videos["entries"]]
+                    data = {
+                        "title": playlist.get("title"),
+                        "url": playlist.get("url"),
+                        "id": playlist.get("id"),
+                        "videos": videos,
+                    }
+                    return data
+                except Exception as e:
+                    print(f"Error extracting playlist {playlist.get('title')}: {e}")
+                    return None
+
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                # 创建并发任务
+                future_to_playlist = {
+                    executor.submit(extract_playlist_info, playlist): playlist
+                    for playlist in result_playlist["entries"]
                 }
-                playlist4videos.append(data)
+
+                # 等待每个任务完成，并收集结果
+                for future in as_completed(future_to_playlist):
+                    playlist = future_to_playlist[future]
+                    try:
+                        data = future.result()
+                        if data:
+                            playlist4videos.append(data)
+                    except Exception as e:
+                        print(
+                            f"Playlist processing failed for {playlist.get('title')}: {e}"
+                        )
         except Exception:
             return None
     return playlist4videos
@@ -155,10 +184,11 @@ def make_videos(channel, videos_data):
     while True:
         try:
             videos = get_video_urls(channel)
+            # print(f"Got {len(videos)} videos for {channel}.")
 
             break
         except Exception:
-            # print(f"Failed to get {channel}'s videos, retrying...")
+            print(f"Failed to get {channel}'s videos, retrying...")
             time.sleep(5)
     for video_info in videos:
         video = video_info[0]
@@ -172,14 +202,14 @@ def make_videos(channel, videos_data):
         for playlist in playlists:
             for video in playlist["videos"]:
                 for url in cur_urls:
-                    if url["url"] == video:
+                    if url["url"] == video and url["url"] not in ord_urls:
                         url["playlist"] = playlist["title"]
                         url["playlist_url"] = playlist["url"]
 
                         if playlist["title"] not in videos_data:
                             if len(playlist["title"]) > 20:
 
-                                def clean_ans(ans):
+                                def clean_ans(ans: str):
                                     if ans.startswith('"') and ans.endswith('"'):
                                         ans = ans.strip('"')
                                     ans = (
@@ -211,6 +241,12 @@ def make_videos(channel, videos_data):
                             url["playlist_zh"] = videos_data[playlist["title"]]
                         else:
                             url["playlist_zh"] = videos_data[playlist["title"]]
+
+                        break
+                    elif url["url"] == video and url["url"] in ord_urls:
+                        ordidx = ord_urls.index(url["url"])
+                        curidx = cur_urls.index(url)
+                        cur_urls[curidx] = ord_videos[ordidx]
 
                         break
     return cur_urls
@@ -262,6 +298,14 @@ def update_video_urls():
 
 
 def manage_video_urls():
+    global ord_videos
+    global ord_urls
+    if os.path.exists("cache/channels_video.toml"):
+        ord_videos = load_channels("cache/channels_video.toml")["videos"]
+        ord_urls = [item["url"] for item in ord_videos]
+    else:
+        ord_videos = []
+        ord_urls = []
     while True:
         if not os.path.exists(
             "cache/channels_video.toml"

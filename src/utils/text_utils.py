@@ -778,7 +778,7 @@ def make_words_equal(words, del_info):
                 il, ir = matches[0].span()
                 iil, iir = matches[1].span()
                 item = diff.output_markdown[ir:iil]
-                print(item)
+                # print(item)
                 id_str_list = item.split()
             id_s_i, id_e_i = find_sublist_indices(id_str_list, check_list)
 

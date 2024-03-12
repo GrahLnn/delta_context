@@ -269,7 +269,7 @@ def extract_vocal(audio_path, output_path, output_name):
         print_status(flag, desc)
         audio = AudioSegment.from_file(audio_path)
         duration_hours = audio.duration_seconds / 60 / 60
-        segment_duration_ms = 3600000
+        segment_duration_ms = 3600000 * 3
         part_list = []
         os.makedirs(f"{output_path}/split_stream", exist_ok=True)
         if duration_hours > 3:
@@ -299,6 +299,9 @@ def extract_vocal(audio_path, output_path, output_name):
 
         clean_list = []
         for i, part in enumerate(part_list):
+            desc[0] = (
+                f"clean speaker part {i+1}" if len(part_list) > 1 else "clean speaker"
+            )
             infer(
                 part,
                 out_path,
@@ -312,27 +315,64 @@ def extract_vocal(audio_path, output_path, output_name):
                 f"{out_path}/1_1_(Vocals).wav",
                 f"{out_path}/{i+1}(Vocals).wav",
             )
-            clean_list.append(f"{out_path}/{i+1}(Vocals).wav")
-            desc[0] = (
-                f"clean speaker part {i+1}" if len(part_list) > 1 else "clean speaker"
-            )
-        if len(clean_list) == 1:
-            shutil.copy(
-                clean_list[0],
-                f"{output_path}/{output_name}.wav",
-            )
-        else:
-            combined = AudioSegment.from_wav(clean_list[0])
+            clean_list.append(f"clean_speaker/{i+1}(Vocals).wav")
 
-            # 遍历剩下的音频文件并将它们追加到第一个文件之后
-            for file in clean_list[1:]:
-                next_audio = AudioSegment.from_wav(file)
-                combined += next_audio
-            combined.export(
-                f"{output_path}/{output_name}.wav",
-                format="wav",
-            )
-            # 删除split_stream文件夹
+        flag[0] = False
+        if len(clean_list) == 1:
+            # shutil.copy(
+            #     f"{output_path}/{clean_list[0]}",
+            #     f"{output_path}/{output_name}.wav",
+            # )
+            ffmpeg_cmd = [
+                "ffmpeg",
+                "-i",
+                f"{output_path}/{clean_list[0]}",
+                "-q:a",
+                "0",
+                "-map",
+                "a",
+                f"{output_path}/{output_name}.mp3",
+                "-y",
+            ]
+            subprocess.run(ffmpeg_cmd, check=True)
+        else:
+            desc[0] = "merge audio"
+            filelist_path = f"{output_path}/filelist.txt"
+            with open(filelist_path, "w") as filelist:
+                for file in clean_list:
+                    filelist.write(f"file '{file}'\n")
+
+            command = [
+                "ffmpeg",
+                "-y",  # 确保这一行在指定输出文件之前
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                filelist_path,
+                "-c",
+                "libmp3lame",
+                f"{output_path}/{output_name}.mp3",
+            ]
+            subprocess.run(command)
+            # os.remove(filelist_path)
+
+            # combined: AudioSegment = AudioSegment.from_wav(
+            #     clean_list[0]
+            # ).set_frame_rate(44100)
+
+            # # 遍历剩下的音频文件并将它们追加到第一个文件之后
+            # for file in clean_list[1:]:
+            #     next_audio: AudioSegment = AudioSegment.from_wav(file).set_frame_rate(
+            #         44100
+            #     )
+            #     combined += next_audio
+            # combined.export(
+            #     f"{output_path}/{output_name}.flac",
+            #     format="flac",
+            # )
+        # 删除split_stream文件夹
         shutil.rmtree(f"{output_path}/split_stream")
         flag[0] = False
     except Exception as e:

@@ -343,15 +343,18 @@ def upload(path_to_file, img_path, tags, desc, title, season, metadatapath):
             driver.find_element(
                 By.XPATH, "//button[.//span[text()='创建并加入']]"
             ).click()
-
-        wait.until(
-            EC.presence_of_element_located(
-                (
-                    By.XPATH,
-                    f"//span[@class='season-enter-text']//span[contains(text(), '{season}')]",
+        try:
+            wait.until(
+                EC.presence_of_element_located(
+                    (
+                        By.XPATH,
+                        f"//span[@class='season-enter-text']//span[contains(text(), '{season}')]",
+                    )
                 )
             )
-        )
+        except Exception as e:
+            driver.save_screenshot("season_screenshot.png")
+            raise ValueError("season fill failed")
         driver.find_element(
             By.XPATH,
             "//span[@class='bcc-checkbox-label' and contains(text(), '此稿件不生成更新推送')]",

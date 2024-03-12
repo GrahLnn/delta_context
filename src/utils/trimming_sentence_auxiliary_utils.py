@@ -143,7 +143,7 @@ def split_by_LLM(transcript, translate, model="gpt-3.5-turbo-0125"):
 def total_char_count(text):
     chinese_characters = len(re.findall(r"[\u4e00-\u9fff]", text))
     other_char = len(re.findall(r"[A-Za-z0-9]", text))
-    total_count = chinese_characters + math.ceil(other_char / 2)
+    total_count = chinese_characters + math.ceil(other_char / 3)
     return total_count
 
 
@@ -174,23 +174,20 @@ def split_sentence(transcripts: list[str], translates: list[str]):
     while True:
         modified = False
 
-        bar = create_progress_bar(count / len(transcripts))
-        print(
-            f"\rsplit: {bar} {count}/{len(transcripts)}|{(count / len(transcripts)*100):.2f}%",
-            end="",
-        )
         for i, (transcript, translate) in enumerate(zip(transcripts, translates)):
             if i > count:
                 count = i
             total_count = total_char_count(translate)
             if total_count > TARGET_LEN:
                 prompt = f'Please split the following sentence into multiple sentences. Do not add any characters. Then put them in a JSON array with a field named "part_list":\n"""{translate}"""'
-                llm_answer = get_completion(prompt, json_output=True)
+                llm_answer = get_completion(prompt, json_output=True, temperature=1)
                 la_combined = json.loads(llm_answer)["part_list"]
+                la_combined = [item for item in la_combined if item]
                 if len(la_combined) == 1:
                     prompt = f'将这句话分成两个均匀部分，不补充任何字符。然后放在一个字段为"part_list"的JSON数组里：\n"{translate}"'
                     llm_answer = get_completion(prompt, json_output=True)
                     la_combined = json.loads(llm_answer)["part_list"]
+                    la_combined = [item for item in la_combined if item]
 
                 new_la_combined = []
 
@@ -239,9 +236,12 @@ def split_sentence(transcripts: list[str], translates: list[str]):
 
                 transcripts[i] = split_sentence_with_ratio(new_la, transcript)
                 translates[i] = new_la
-                # print()
-                # print(transcripts[i])
-                # print(translates[i])
+                if "" in transcripts[i] or "" in translates[i]:
+                    print("\n------------------- error -------------------")
+                    print(transcripts[i])
+                    print(translates[i])
+                    raise Exception("empty string error")
+
                 modified = True
                 transcripts, translates = flatten_list(transcripts), flatten_list(
                     translates
@@ -249,8 +249,14 @@ def split_sentence(transcripts: list[str], translates: list[str]):
 
                 break
 
+        bar = create_progress_bar(count / len(transcripts))
+        print(
+            f"\rsplit: {bar} {count}/{len(transcripts)}|{(count / len(transcripts)*100):.2f}%",
+            end="",
+        )
         if not modified:
             break
+
     datas = [
         {"transcript": tc, "translation": tl}
         for tc, tl in zip(flatten_list(transcripts), flatten_list(translates))

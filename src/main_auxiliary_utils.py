@@ -77,8 +77,9 @@ def clean_vocal(afile, output_path, output_name):
         flag[0] = False
         print()
     except Exception as e:
-        print(e)
+
         flag[0] = False
+        raise e
 
 
 def get_transcribe(audio_file, cache_path, add_timestamps=False):
@@ -382,15 +383,25 @@ def deliver_and_save_completion(items, credential=None):
             try:
                 info = load_cache(item["MetaDataPath"])
                 if not info.get("is_delivered", False):
-                    res_ids = upload(
-                        item["Video"],
-                        item["Thumbnail"],
-                        item["Tag"],
-                        item["Description"],
-                        item["Title"],
-                        item["Season"],
-                        item["MetaDataPath"],
-                    )
+
+                    try_count = 0
+                    while try_count < 3:
+                        try:
+                            res_ids = upload(
+                                item["Video"],
+                                item["Thumbnail"],
+                                item["Tag"],
+                                item["Description"],
+                                item["Title"],
+                                item["Season"],
+                                item["MetaDataPath"],
+                            )
+                            break
+                        except Exception as e:
+                            time.sleep(100)
+                            try_count += 1
+                            if try_count == 3:
+                                raise e
                     if not res_ids:
                         raise ValueError("upload failed, can not match res_ids")
                     # upload 会修改 info，所以需要重新加载

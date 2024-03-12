@@ -41,7 +41,7 @@ import datetime
 from redlines import Redlines
 import json
 from src.utils.summary_utils import get_timed_texts, get_summary_text
-
+from pathlib import Path
 import httpx
 import atexit
 
@@ -115,7 +115,7 @@ if os.path.exists("cache/delivery_videos.toml"):
 limit = None
 addition = [
     # {
-    #     "url": "https://www.youtube.com/watch?v=hbo98xNLzog",
+    #     "url": "https://www.youtube.com/watch?v=iojdLg7eVXc",
     #     "uploader": "@CppCon",
     # }
 ]
@@ -153,6 +153,7 @@ while True:
             ]
         refrash_list = True
 
+    # video_datas = addition
     item = video_datas.pop(0)
     sleep_until_morning()
     start_time = datetime.datetime.now()
@@ -175,7 +176,7 @@ while True:
         except Exception:
             print("download error")
             time.sleep(10)
-    print(fname)
+    # print(fname)
     audio = AudioSegment.from_file(afile)
     audio_length_minutes = len(audio) / (1000 * 60)  # 长度转换为分钟
 
@@ -204,7 +205,8 @@ while True:
     # afile = "video/sample1.wav"
     # cpath = "./"
     # print(afile)
-
+    afile = Path(afile).with_suffix(".mp3")
+    afile: str = str(afile)
     result = get_transcribe(afile, cpath, add_timestamps=True)
     print()
     # sys.exit()

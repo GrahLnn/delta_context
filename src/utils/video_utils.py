@@ -21,6 +21,7 @@ def fetch_video_info(url, max_retries=3):
         "quiet": True,
         "extract_flat": True,
         "force_generic_extractor": True,
+        "logger": loggerOutputs,
     }
 
     attempts = 0
@@ -71,6 +72,7 @@ def download_mp4(video_url, file_name):
                 "preferedformat": "mp4",
             }
         ],
+        "logger": loggerOutputs,
     }
 
     while retry_count < max_retries:
@@ -153,13 +155,32 @@ Based context information translate following title to Chinese:
     return video_info
 
 
+class loggerOutputs:
+    def error(msg):
+        # print("Captured Error: " + msg)
+        pass
+
+    def warning(msg):
+        # print("Captured Warning: " + msg)
+        pass
+
+    def debug(msg):
+        # print("Captured Log: " + msg)
+        pass
+
+
 def get_video_info(video_url, max_retries=15, wait_time=5):
     attempt = 0
     video_info = None
 
     while attempt < max_retries:
         try:
-            with yt_dlp.YoutubeDL({}) as ydl:
+            with yt_dlp.YoutubeDL(
+                {
+                    "logger": loggerOutputs,
+                    "quiet": True,
+                }
+            ) as ydl:
                 video_info = ydl.extract_info(video_url, download=False)
             break  # 如果成功获取信息，跳出循环
         except yt_dlp.utils.DownloadError as e:
@@ -173,7 +194,7 @@ def get_video_info(video_url, max_retries=15, wait_time=5):
     return video_info
 
 
-def handle_remote_video(video):
+def handle_remote_video(video: dict):
     video_info = get_video_info(video.get("url"))
 
     # print(video)

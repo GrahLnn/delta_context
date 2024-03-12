@@ -385,6 +385,20 @@ def clean_sentences(seg_transcripts, seg_translates):
     # 用过滤后的列表替换原列表
     seg_transcripts = filtered_tcs
     seg_translates = filtered_tls
+
+    for idx, translate in enumerate(seg_translates):
+        seg_translates[idx] = (
+            translate.replace("中国", "zh")
+            .replace("共产党", "CCP")
+            .replace("原子弹", "原子能弹")
+            .replace("习近平", "Xi")
+            .replace("毛泽东", "Mao")
+            .replace("中共", "CCP")
+            .replace("中国共产党", "CCP")
+            .replace("中国人民", "百姓")
+            .replace("中国政府", "官")
+            .replace("国家主席", "")
+        )
     # 从后向前遍历列表
     for idx in range(len(seg_transcripts) - 2, -1, -1):
         current_len = len(seg_transcripts[idx].strip().split())

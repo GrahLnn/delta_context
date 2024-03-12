@@ -314,18 +314,19 @@ def chat_complation(headers, payload, MAX_RETRY=5):
             break
         except requests.exceptions.ReadTimeout:
             retry += 1
-            traceback.print_exc()
+            # traceback.print_exc()
             if retry > MAX_RETRY:
                 raise TimeoutError
             if MAX_RETRY != 0:
-                print(f"请求超时，正在重试 ({retry}/{MAX_RETRY}) ……")
+                # print(f"\n请求超时，正在重试 ({retry}/{MAX_RETRY}) ……")
+                time.sleep(5)
         except Exception as e:
-            traceback.print_exc()
+            # traceback.print_exc()
             retry += 1
             if retry > MAX_RETRY:
                 raise e
             if MAX_RETRY != 0:
-                print(f"请求异常，正在重试 ({retry}/{MAX_RETRY}) ……")
+                # print(f"\n请求异常，正在重试 ({retry}/{MAX_RETRY}) ……")
                 time.sleep(5)
 
     stream_response = response.iter_lines()

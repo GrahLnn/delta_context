@@ -460,13 +460,22 @@ async def translate(
     #     f"translate, vid={vid}, cid={cid}, lang={lang}, tokens={tokens}"
     # )  # nopep8.
 
-    content = await chat(
-        messages=messages,
-        model=Model.GPT_3_5_TURBO,
-        top_p=0.1,
-        timeout=90,
-        json_output=True,
-    )
+    try_count = 0
+    while try_count < 3:
+        try:
+            content = await chat(
+                messages=messages,
+                model=Model.GPT_3_5_TURBO,
+                top_p=0.1,
+                timeout=90,
+                json_output=True,
+            )
+            break
+        except Exception:
+            try_count += 1
+            await asyncio.sleep(60)
+            if try_count >= 3:
+                raise Exception(f"translate, but failed, lang={lang}")
 
     # logger.info(
     #     f"translate, vid={vid}, cid={cid}, lang={lang}, content=\n{content}"
