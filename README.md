@@ -26,6 +26,16 @@ Automatically update all videos from selected channels daily (customizable selec
 
 ~~Automatically download Genshin Impact.~~
 
+## Roadmap
+
+Consistent translation of terms across the board.
+
+Turn the video into an article with accurate topic screenshots.
+
+Extract all valid information and organize it into a structured directed graph.
+
+Consistency of knowledge in a larger landscape.
+
 ## How to use
 
 Please no.
