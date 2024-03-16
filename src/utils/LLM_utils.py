@@ -128,30 +128,13 @@ def get_completion(
     #     prompt, sys_prompt, model, temperature, top_p, json_output
     # )
 
-    mas_retry = 2
-    while True:
-        try:
-            response = predict_no_ui_long_connection(
-                prompt,
-                sys_prompt,
-                json_output=json_output,
-                model=model,
-                temperature=temperature,
-            )
-            break
-        except Exception as e:
-            if mas_retry == 0:
-                raise e
-            mas_retry -= 1
-            sleep_time = 1
-            while sleep_time < 60:
-                print(
-                    f"OpenAI API error, retrying...{60-sleep_time}s",
-                    end="\r",
-                    flush=True,
-                )
-                time.sleep(1)
-                sleep_time += 1
+    response = predict_no_ui_long_connection(
+        prompt,
+        sys_prompt,
+        json_output=json_output,
+        model=model,
+        temperature=temperature,
+    )
 
     return response
 
@@ -338,7 +321,8 @@ def chat_complation(headers, payload, MAX_RETRY=5):
         except StopIteration:
             break
         except requests.exceptions.ConnectionError:
-            chunk = next(stream_response)  # 失败了，重试一次？再失败就没办法了。
+            raise Exception(f"网络连接中断 \n{payload}")
+            # chunk = next(stream_response)  # 失败了，重试一次？再失败就没办法了。
         (
             chunk_decoded,
             chunkjson,
@@ -416,7 +400,19 @@ def predict_no_ui_long_connection(
         json_output=json_output,
         temperature=temperature,
     )
-    result = chat_complation(headers, payload)
+    try_count = 0
+    while try_count < 5:
+        try:
+            result = chat_complation(headers, payload)
+            break
+        except Exception as e:
+            try_count += 1
+            if try_count == 5:
+                raise e
+            print(f"An error occurred: {e}.")
+            print("\nRetrying in 5 seconds...", end="\r", flush=True)
+            time.sleep(5)
+    # result = chat_complation(headers, payload)
     # print()
     enc = tiktoken.encoding_for_model(model)
     count_input_token = len(enc.encode(inputs + " " + sys_prompt))

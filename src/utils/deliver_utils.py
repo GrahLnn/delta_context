@@ -90,7 +90,7 @@ def save_completion(item, completion_path="cache/completed_videos.toml"):
 
 def interval_deliver():
     # 计算剩余时间
-    interval = datetime.timedelta(hours=6)
+    interval = datetime.timedelta(hours=1)
     # if elapsed_time < interval:
     #     remaining_time = interval - elapsed_time
 

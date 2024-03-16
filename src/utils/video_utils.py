@@ -30,15 +30,15 @@ def fetch_video_info(url, max_retries=3):
             with yt_dlp.YoutubeDL(options) as ydl:
                 info_dict = ydl.extract_info(url, download=False)
 
-                title = info_dict.get("title", None)
-                video_url = info_dict.get("webpage_url", None)
-                description = info_dict.get("description", None)
-                uploader = info_dict.get("uploader", None)
-                thumbnail = info_dict.get("thumbnail", None)
+                title: str = info_dict.get("title", None)
+                video_url: str = info_dict.get("webpage_url", None)
+                description: str = info_dict.get("description", None)
+                uploader: str = info_dict.get("uploader", None)
+                thumbnail: str = info_dict.get("thumbnail", None)
 
                 return {
                     "title": title,
-                    "description": description,
+                    "description": description.replace("\\", "\\\\"),
                     "uploader": uploader,
                     "thumbnail": thumbnail,
                     "video_url": video_url,
@@ -229,6 +229,10 @@ def handle_remote_video(video: dict):
             # print("[error check 2]", video_info)
         write_video_info(f"{cache_path}/{file_id}", video_info)
 
+    thumbnail_save_path = f"{cache_path}/{file_id}_thumbnail.png"
+    if not os.path.exists(thumbnail_save_path):
+        download_thumbnail(video_info["thumbnail"], thumbnail_save_path)
+
     if not os.path.exists(video_file):
         start_mp4_download(video.get("url"), f"{file_path}/{file_name}")
 
@@ -377,10 +381,8 @@ def insert_subtitle(
 
 def write_video_info(meta_file_path, video_info):
     toml_file_path = f"{meta_file_path}.toml"
-    thumbnail_save_path = f"{meta_file_path}_thumbnail.png"
 
     save_to_toml(video_info, toml_file_path)
-    download_thumbnail(video_info["thumbnail"], thumbnail_save_path)
 
 
 def merge_videos(video_list, output_path):

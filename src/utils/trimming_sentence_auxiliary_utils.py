@@ -179,8 +179,10 @@ def split_sentence(transcripts: list[str], translates: list[str]):
                 count = i
             total_count = total_char_count(translate)
             if total_count > TARGET_LEN:
-                prompt = f'Please split the following sentence into multiple sentences. Do not add any characters. Then put them in a JSON array with a field named "part_list":\n"""{translate}"""'
-                llm_answer = get_completion(prompt, json_output=True, temperature=1)
+                prompt = 'Please split the user sentence into multiple sentences. Do not add any characters. Then put them in a JSON array with a field named "part_list":'
+                llm_answer = get_completion(
+                    sys_prompt=prompt, prompt=translate, json_output=True, temperature=1
+                )
                 la_combined = json.loads(llm_answer)["part_list"]
                 la_combined = [item for item in la_combined if item]
                 if len(la_combined) == 1:
@@ -221,6 +223,7 @@ def split_sentence(transcripts: list[str], translates: list[str]):
                     prompt = f'将这句话分成两个均匀部分，不补充任何字符。然后放在一个字段为"part_list"的JSON数组里：\n"{translate}"'
                     llm_answer = get_completion(prompt, json_output=True)
                     new_la_combined = json.loads(llm_answer)["part_list"]
+                    la_combined = [item for item in la_combined if item]
 
                 new_la = new_la_combined
                 # current_length = 0
@@ -233,11 +236,17 @@ def split_sentence(transcripts: list[str], translates: list[str]):
                 #     current_length += len_count
                 # if new_la_combined:
                 #     new_la.append("".join(new_la_combined))
-
-                transcripts[i] = split_sentence_with_ratio(new_la, transcript)
-                translates[i] = new_la
+                if len(new_la) != 1:
+                    transcripts[i] = split_sentence_with_ratio(new_la, transcript)
+                    translates[i] = new_la
+                else:
+                    transcripts[i] = transcript
+                    translates[i] = new_la
                 if "" in transcripts[i] or "" in translates[i]:
                     print("\n------------------- error -------------------")
+                    print(llm_answer)
+                    print(translate)
+                    print([item for item in new_la if item])
                     print(transcripts[i])
                     print(translates[i])
                     raise Exception("empty string error")

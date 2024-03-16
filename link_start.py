@@ -114,10 +114,10 @@ if os.path.exists("cache/delivery_videos.toml"):
 
 limit = None
 addition = [
-    # {
-    #     "url": "https://www.youtube.com/watch?v=iojdLg7eVXc",
-    #     "uploader": "@CppCon",
-    # }
+    {
+        "url": "https://www.youtube.com/watch?v=jP9bbrK0DEs",
+        "uploader": "@CppCon",
+    }
 ]
 channel_filter = []
 playlist_filter = ["Flutter Package of the Week", "Flutter Widget of the Week"]
@@ -267,7 +267,7 @@ while True:
         #     # print(cut_stamps)
 
         # elif audio_length_minutes <= LIMIT_LEN_TIME and audio_length_minutes > 2:
-        if audio_length_minutes > 2:
+        if audio_length_minutes > 1:
             shutil.copy(afile, f"{clip_path}/audio")
             waiting_thread(threads)
             shutil.copy(f"{fpath}/{fname}.mp4", f"{clip_path}/video")
@@ -463,4 +463,5 @@ while True:
     cost_calculator.reset_total_cost()
     # if upload_count % 5 == 0 and upload_count != 0:
     #     interval_deliver()
+    interval_deliver()
     upload_count += 1

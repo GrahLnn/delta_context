@@ -146,14 +146,13 @@ def ask_LLM_to_translate(texts):
                         f"Transcribe not equal\n{transcript}\n{' '.join(tcs)}"
                     )
                 break
-            except Exception as e:
+            except Exception:
                 # print(e)
                 try_count += 1
                 time.sleep(10)
-                if try_count == 3:
-                    raise Exception(
-                        f"Failed to translate {transcript} after 3 tries: {e}"
-                    )
+        if try_count == 3:
+            # raise Exception(f"Failed to translate {transcript} after 3 tries")
+            continue
 
         filtered_tcs = []
         filtered_tls = []
