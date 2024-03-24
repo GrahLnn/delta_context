@@ -304,6 +304,7 @@ def download_audio(video_url, output_path):
                 "preferredquality": "192",
             }
         ],
+        "logger": loggerOutputs,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([video_url])
