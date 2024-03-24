@@ -1,7 +1,13 @@
 import os, sys, torch, re, copy
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+from transformers import (
+    AutoModelForSpeechSeq2Seq,
+    AutoProcessor,
+    pipeline,
+    WhisperForConditionalGeneration,
+    WhisperProcessor,
+)
 from pydub import AudioSegment
-
+import librosa
 from asset.env.env import DEVICE, BATCH_SIZE, COMPUTE_TYPE, LIMIT_LEN_TIME
 from .status_utils import print_status, _CustomProgressBar
 from .LLM_utils import get_completion
@@ -9,8 +15,11 @@ from .transcribe_auxiliary_utils import split_on_second_last_dot
 from tqdm import tqdm
 from whisper.tokenizer import get_tokenizer
 from transformers import GenerationConfig
-
+from .whisper_analysis.dtw_analysis_hf import get_words_timestamp
 import whisper
+import subprocess
+import shutil
+import string
 
 
 def transcribe_with_ins_whisper(audio_file, timestamps=False):
@@ -36,6 +45,84 @@ def transcribe_with_ins_whisper(audio_file, timestamps=False):
 
 
 def transcribe_with_whisper(audio_file, timestamps=False):
+    # start_time = datetime.now()
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+    model_id = "distil-whisper/distil-large-v3"
+
+    model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        model_id,
+        torch_dtype=torch_dtype,
+        low_cpu_mem_usage=True,
+        use_safetensors=True,
+    )
+    model.to(device)
+
+    processor = AutoProcessor.from_pretrained(model_id)
+
+    pipe = pipeline(
+        "automatic-speech-recognition",
+        model=model,
+        tokenizer=processor.tokenizer,
+        feature_extractor=processor.feature_extractor,
+        max_new_tokens=128,
+        chunk_length_s=25,
+        batch_size=16,
+        torch_dtype=torch_dtype,
+        device=device,
+    )
+
+    # src_audio = "video/1_MapKit_with_SwiftUI__Regions_Markers_and_Annotations_and_CameraPosition/9xzHJAT_Iqk.mp3"
+
+    split_audio(audio_file, "test_output")
+
+    files = os.listdir("test_output")
+    files.sort(key=natural_keys)
+    model = WhisperForConditionalGeneration.from_pretrained(model_id).cuda()
+    processor = WhisperProcessor.from_pretrained(model_id)
+    answer = []
+    for i, file in enumerate(tqdm(files, desc="Transcribing")):
+        # print(file)
+        resulta = pipe(f"test_output/{file}")
+        # print(resulta["text"])
+        clip_audio, _ = librosa.load(f"test_output/{file}", sr=16000)
+        stamps = get_words_timestamp(model, processor, clip_audio, resulta["text"])
+        for ii in range(len(stamps)):
+            stamps[ii][1] += i * 25
+            stamps[ii][1] = round(stamps[ii][1], 2)
+            stamps[ii][2] += i * 25
+            stamps[ii][2] = round(stamps[ii][2], 2)
+        if answer and stamps[0][0].strip() == answer[-1]["word"].strip():
+            answer[-1]["end"] = stamps[0][2]
+            stamps = stamps[1:]
+        stamps = [
+            {"word": str(n[0]), "start": str(n[1]), "end": str(n[2])} for n in stamps
+        ]
+        answer.extend(stamps)
+        # rm = "".join([text[0] for text in stamps])
+        # # transcription = transcription.replace(rm, "")
+        # print(stamps)
+        # print(rm)
+
+    # print(len(answer))
+    shutil.rmtree("test_output")
+    answer = clean(answer)
+    text = "".join([text["word"] for text in answer]).strip()
+    new_words = []
+    for word in answer:
+        if word["word"].startswith(" "):
+            new_words.append(word)
+        else:
+            try:
+                new_words[-1]["word"] += word["word"]
+                new_words[-1]["end"] = word["end"]
+            except IndexError:
+                new_words.append(word)
+    return {"text": text, "words": new_words}
+
+
+def transcribe_with_openai_whisper(audio_file, timestamps=False):
     flag = [True]
     desc = [""]
     print_status(flag, desc=desc)
@@ -390,3 +477,168 @@ def find_closest_stamps(merged_chunks):
             target_time = interval + closest_stamp
 
     return closest_stamps
+
+
+def get_audio_length_ffmpeg(audio_path):
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            audio_path,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    duration = float(result.stdout)
+    return duration
+
+
+def split_audio(input_path, output_folder, segment_length=25, output_format="wav"):
+    # 确保输出文件夹存在
+    os.makedirs(output_folder, exist_ok=True)
+    audio_length = get_audio_length_ffmpeg(input_path)
+
+    num_segments = int(audio_length // segment_length) + (
+        1 if audio_length % segment_length else 0
+    )
+
+    for i in tqdm(range(num_segments), desc="Splitting Audio"):
+        start_time = i * segment_length
+        duration = min(segment_length, audio_length - start_time)
+        output_path = os.path.join(
+            output_folder,
+            f"segment_{i + 1}.{output_format}",
+        )
+        if os.path.exists(output_path):
+            continue
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-ss",
+                str(start_time),
+                "-i",
+                input_path,
+                "-t",
+                str(duration),
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                "16000",
+                output_path,
+            ],
+            stdout=subprocess.DEVNULL,  # 抑制标准输出
+            stderr=subprocess.DEVNULL,  # 抑制错误输出
+        )
+
+
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+
+def natural_keys(text):
+    """
+    alist.sort(key=natural_keys) 将会以人类的方式对列表进行排序
+    """
+    return [atoi(c) for c in re.split(r"(\d+)", text)]
+
+
+def clean(words: list[dict]):
+    new_words = []
+    for idx, word in enumerate(words):
+        new_word = word.copy()
+        new_word["idx"] = idx
+        new_words.append(new_word)
+
+    bad_sequence = []
+    cur_words = []
+    for word in new_words:
+        word["word"] = word["word"].strip().strip(string.punctuation).lower()
+        if not cur_words:
+            cur_words.append(word)
+        elif float(word["start"]) - float(cur_words[-1]["end"]) < 5:
+            cur_words.append(word)
+        else:
+            bad_sequence.append(cur_words)
+            cur_words = [word]
+
+    vaild_check = []
+    surface_len = 40
+    for idx, sequence in enumerate(bad_sequence):
+        words_seq = set([word["word"] for word in sequence])
+        if len(list(words_seq)) / len(sequence) < 0.8 and len(sequence) < surface_len:
+
+            vaild_check.append(False)
+        elif (
+            len(sequence) < surface_len
+            and idx > 0
+            and len(
+                list(
+                    set(
+                        [word["word"] for word in sequence]
+                        + [word["word"] for word in bad_sequence[idx - 1]]
+                    )
+                )
+            )
+            / (len(sequence) + len(bad_sequence[idx - 1]))
+            < len(list(set([word["word"] for word in bad_sequence[idx - 1]])))
+            / (len(bad_sequence[idx - 1]))
+        ):
+            vaild_check.append(False)
+        else:
+            vaild_check.append(True)
+
+    for idx, check in enumerate(vaild_check):
+        if check:
+            if idx > 0 and idx < len(vaild_check) - 1:
+                if not vaild_check[idx - 1] and not vaild_check[idx + 1]:
+                    vaild_check[idx] = False
+
+    for idx, check in enumerate(vaild_check):
+        if len(bad_sequence[idx]) < 50:
+            if len([word["word"] for word in bad_sequence[idx]]) < 5:
+                vaild_check[idx] = False
+            # print(
+            #     idx,
+            #     vaild_check[idx],
+            #     len([word["word"] for word in bad_sequence[idx]]),
+            #     [word["word"] for word in bad_sequence[idx]],
+            # )
+            # print()
+
+    start = 0
+    end = 0
+    for idx, check in enumerate(vaild_check):
+        if len(bad_sequence[idx]) < 50:
+            if not check and idx - end <= 1:
+                end = idx
+            else:
+                break
+
+    if start == end:
+        return words
+
+    remove_list = []
+    for idx in range(start, end + 1):
+        remove_list += bad_sequence[idx]
+
+    remove_list = [word["idx"] for word in remove_list]
+
+    remove_list = sorted(remove_list, reverse=True)
+    # print(remove_list)
+
+    for idx in remove_list:
+        words.pop(idx)
+
+    x_words = []
+    for idx, word in enumerate(words):
+        if not x_words:
+            x_words.append(word)
+        elif word != x_words[-1]:
+            x_words.append(word)
+
+    return x_words

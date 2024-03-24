@@ -184,12 +184,12 @@ def split_sentence(transcripts: list[str], translates: list[str]):
                     sys_prompt=prompt, prompt=translate, json_output=True, temperature=1
                 )
                 la_combined = json.loads(llm_answer)["part_list"]
-                la_combined = [item for item in la_combined if item]
+                la_combined = [item for item in la_combined if item.strip()]
                 if len(la_combined) == 1:
                     prompt = f'将这句话分成两个均匀部分，不补充任何字符。然后放在一个字段为"part_list"的JSON数组里：\n"{translate}"'
                     llm_answer = get_completion(prompt, json_output=True)
                     la_combined = json.loads(llm_answer)["part_list"]
-                    la_combined = [item for item in la_combined if item]
+                    la_combined = [item for item in la_combined if item.strip()]
 
                 new_la_combined = []
 
@@ -222,8 +222,8 @@ def split_sentence(transcripts: list[str], translates: list[str]):
                 if len(new_la_combined) == 1:
                     prompt = f'将这句话分成两个均匀部分，不补充任何字符。然后放在一个字段为"part_list"的JSON数组里：\n"{translate}"'
                     llm_answer = get_completion(prompt, json_output=True)
-                    new_la_combined = json.loads(llm_answer)["part_list"]
-                    la_combined = [item for item in la_combined if item]
+                    new_la_combined: list[str] = json.loads(llm_answer)["part_list"]
+                    la_combined = [item for item in la_combined if item.strip()]
 
                 new_la = new_la_combined
                 # current_length = 0

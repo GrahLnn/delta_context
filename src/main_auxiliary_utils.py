@@ -121,9 +121,11 @@ def align_due_sentences(texts, cache_path, words):
         ord_words = copy.deepcopy(words)
         test = Redlines(ord_texts, proc_texts, markdown_style="none")
         text = test.output_markdown
+        # print(text)
         try:
 
             del_info = make_tag_info(text)
+            # print(del_info)
             words = make_words_equal(words, del_info)
             words = flatten_list(words)
             words = [w for w in words if w != {}]
@@ -131,6 +133,18 @@ def align_due_sentences(texts, cache_path, words):
                 if not w.get("start"):
                     print(w)
                     raise ValueError("start not found")
+            n_words = []
+            for w in words:
+                if len(w["word"].split()) != 1:
+                    n_words.extend(
+                        [
+                            {"word": word, "start": w["start"], "end": w["end"]}
+                            for word in w["word"].split()
+                        ]
+                    )
+                else:
+                    n_words.append(w)
+
             # with open("words_check.toml", "w", encoding="utf-8") as f:
             #     data = {
             #         "a": text,
@@ -148,7 +162,7 @@ def align_due_sentences(texts, cache_path, words):
             #     toml.dump(data, f)
             raise e
 
-        return words
+        return n_words
 
     def compute_LLM_translation():
         # current_cost = cost_calculator.get_total_cost()
@@ -186,6 +200,23 @@ def align_due_sentences(texts, cache_path, words):
     words_text = " ".join([w["word"].strip() for w in words])
     words = check_words_equal(words_text, " ".join(texts), words)
     print(f'length check: {len(words)}/{len(" ".join(texts).split())}')
+    if len(words) != len(" ".join(texts).split()):
+        # diff = Redlines(
+        #     " ".join([w["word"].strip() for w in words]),
+        #     " ".join(texts),
+        #     markdown_style="none",
+        # )
+        # with open("diff.md", "w", encoding="utf-8") as f:
+        #     f.write(diff.output_markdown)
+
+        # n = " ".join(texts).split()
+        # for i, (w, t) in enumerate(zip(words, n)):
+        #     if w["word"].strip() != t.strip():
+        #         print(words[i - 1], n[i - 1])
+        #         print(i, w, t)
+        #         print(words[i + 1], n[i + 1])
+        #         break
+        raise ValueError("transcripts and words not equal")
 
     result = get_or_cache(f"{cache_path}/LLM_translation.toml", compute_LLM_translation)
     transcripts, translates = result["transcripts"], result["translates"]
@@ -195,11 +226,6 @@ def align_due_sentences(texts, cache_path, words):
     print(f'length check: {len(words)}/{len(" ".join(transcripts).split())}')
     if len(words) != len(" ".join(transcripts).split()):
         raise ValueError("transcripts and words not equal")
-
-    # sys.exti()
-    # test = Redlines(" ".join(texts), " ".join(transcripts), markdown_style="none")
-    # with open("redlines.md", "w", encoding="utf-8") as f:
-    #     f.write(test.output_markdown)
 
     if len(transcripts) != len(translates):
         raise ValueError("transcripts and translates not equal")

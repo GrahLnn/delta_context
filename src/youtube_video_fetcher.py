@@ -23,34 +23,38 @@ def extract_url_info(url):
         "quiet": True,
         # "extract_flat": True,
         # "force_generic_extractor": True,
-        "logger": loggerOutputs,
+        # "logger": loggerOutputs,
         # "no_warnings": True,
         # "ignoreerrors": True,  # 忽略错误
     }
 
+    try_count = 0
     while True:
         try:
             if url in ord_urls:
                 ordidx = ord_urls.index(url)
                 return [url, ord_videos[ordidx]["upload_time"]]
             else:
-                print(f"Extracting info for {url}...")
+                # print(f"Extracting info for {url}...")
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     result = ydl.extract_info(url, download=False)
-                    print([url, int(result["upload_date"])], "\n")
+                    # print([url, int(result["upload_date"])], "\n")
                     return [url, int(result["upload_date"])]
 
         except Exception as e:
             if "This live event will begin in" in str(e):
                 return None  # 特定错误，不重试
-            if "Private video." in str(e):
+            elif "Private video." in str(e):
+                return None
+            elif "Premieres in" in str(e):
                 return None
             time.sleep(5)  # 在重试之前等待
+            try_count += 1
 
 
 def process_urls(urls):
     urls_date = []
-    with ThreadPoolExecutor(max_workers=6) as executor:
+    with ThreadPoolExecutor(max_workers=30) as executor:
         # 提交任务到线程池
         future_to_url = {executor.submit(extract_url_info, url): url for url in urls}
 

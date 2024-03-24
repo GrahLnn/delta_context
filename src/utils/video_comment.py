@@ -141,8 +141,9 @@ def comment_summary_to_video():
                 print("Error syncing video info", task["bvid"], sync_error)
                 # 更新任务时间并重新放回列表
                 task["time"] = datetime.now().timestamp()
-                with thread_lock:
-                    comment_tasks.append(task)
+                if "62002" not in str(sync_error):
+                    with thread_lock:
+                        comment_tasks.append(task)
                 continue  # 跳过当前循环的剩余部分
 
             # 发送摘要
@@ -158,6 +159,8 @@ def comment_summary_to_video():
                 if "12051" not in str(send_error):
                     with thread_lock:
                         comment_tasks.append(task)
+                else:
+                    print("ignoire this task", task["bvid"])
 
         except Exception as e:
             print("Error processing task", task["bvid"], "Error:", e)

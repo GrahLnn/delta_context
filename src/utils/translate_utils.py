@@ -163,7 +163,7 @@ def ask_LLM_to_translate(texts):
                 if n == "":
                     raise Exception("tcs has empty string")
                 elif m == "":
-                    raise Exception("tls has empty string")
+                    raise Exception(f"tls has empty string\n{n}\n{m}")
                 else:
                     filtered_tcs.append(n)
                     filtered_tls.append(m)

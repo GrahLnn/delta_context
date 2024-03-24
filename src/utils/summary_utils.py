@@ -483,8 +483,38 @@ async def translate(
 
     # FIXME (Matthew Lee) prompt output as JSON may not work.
     res: dict = json.loads(content)
-    chapter = res.get("chapter", "").strip()
-    summary = res.get("summary", "").strip()
+    chapter: str = res.get("chapter", "")
+    chapter = (
+        chapter.strip()
+        .replace("中国", "zh")
+        .replace("共产党", "CCP")
+        .replace("原子弹", "原子能头")
+        .replace("习近平", "Xi")
+        .replace("毛泽东", "M")
+        .replace("中共", "CCP")
+        .replace("中国共产党", "CCP")
+        .replace("中国人民", "zh百姓")
+        .replace("中国政府", "zh官")
+        .replace("国家主席", "gp")
+        .replace("天安门", "门")
+        .replace("中华人民共和国", "zh")
+    )
+    summary: str = res.get("summary", "")
+    summary = (
+        summary.strip()
+        .replace("中国", "zh")
+        .replace("共产党", "CCP")
+        .replace("原子弹", "原子能头")
+        .replace("习近平", "Xi")
+        .replace("毛泽东", "M")
+        .replace("中共", "CCP")
+        .replace("中国共产党", "CCP")
+        .replace("中国人民", "zh百姓")
+        .replace("中国政府", "zh官")
+        .replace("国家主席", "gp")
+        .replace("天安门", "门")
+        .replace("中华人民共和国", "zh")
+    )
 
     # Both fields must exist.
     if (not chapter) or (not summary):

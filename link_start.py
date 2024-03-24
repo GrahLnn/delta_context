@@ -114,10 +114,10 @@ if os.path.exists("cache/delivery_videos.toml"):
 
 limit = None
 addition = [
-    {
-        "url": "https://www.youtube.com/watch?v=jP9bbrK0DEs",
-        "uploader": "@CppCon",
-    }
+    # {
+    #     "url": "https://www.youtube.com/watch?v=Z_DssjLeGa0",
+    #     "uploader": "@CppCon",
+    # }
 ]
 channel_filter = []
 playlist_filter = ["Flutter Package of the Week", "Flutter Widget of the Week"]
@@ -155,7 +155,7 @@ while True:
 
     # video_datas = addition
     item = video_datas.pop(0)
-    sleep_until_morning()
+    # sleep_until_morning()
     start_time = datetime.datetime.now()
     elapsed_time = datetime.timedelta(seconds=0)
     print(item)
@@ -210,9 +210,9 @@ while True:
     result = get_transcribe(afile, cpath, add_timestamps=True)
     print()
     # sys.exit()
-    words = []
-    for chunk in result["chunks"]:
-        words.extend(chunk["words"])
+    words = result["words"]
+    # for chunk in result["chunks"]:
+    #     words.extend(chunk["words"])
 
     # chunk_text = [w["text"] for w in result["chunks"]]
     # empty = [w for w in chunk_text if w == ""]
@@ -274,9 +274,9 @@ while True:
             big_chunks = [chunk_texts(result["text"])]
             save_cache({"big_chunks": big_chunks}, f"{cpath}/big_chunks.toml")
 
-            words = []
-            for chunk in result["chunks"]:
-                words.extend(chunk["words"])
+            words = result["words"]
+            # for chunk in result["chunks"]:
+            #     words.extend(chunk["words"])
             print(
                 "len for transcript",
                 len(result["text"].split()),
@@ -344,6 +344,24 @@ while True:
                 result, seg_transcripts, seg_translates
             )  # TODO 验证句子是否横跨check result里的项
             # print(result["segments"][0])
+            # mute_list = []
+            # sensitive_words = [
+            #     "中国",
+            #     "共产党",
+            #     "原子弹",
+            #     "习近平",
+            #     "毛泽东",
+            #     "中共",
+            #     "天安门",
+            #     "中华人民共和国",
+            #     "中华",
+            # ]
+            # for idx, seg in enumerate(result["segments"]):
+            #     for word in sensitive_words:
+            #         if word in seg["translation"]:
+            #             s_e_time = [seg["start"], seg["end"]]
+            #             mute_list.append(s_e_time)
+            #             break
             if aspect_ratio < 1.5:
 
                 for idx, seg in enumerate(result["segments"]):
@@ -438,16 +456,17 @@ while True:
         elif video_clips_path:
             shutil.copy(video_clips_path[0], f"{fpath}/{fname}_zh.mp4")
         # sys.exit()
-        videos = get_deliver_video(
-            cpath, fid, fpath, fname, uploader, item.get("url"), summary=summary
-        )  # TODO: 判断分区字符数描述限制
+        if not item.get("do_not_upload", False):
+            videos = get_deliver_video(
+                cpath, fid, fpath, fname, uploader, item.get("url"), summary=summary
+            )  # TODO: 判断分区字符数描述限制
 
-        # print(videos)
-        # sys.exit(1)
-        deliver_and_save_completion(videos)
+            # print(videos)
+            # sys.exit(1)
+            deliver_and_save_completion(videos)
 
-        # asyncio.run(deliver_and_save_completion(videos, credential))
-        delete_contents_of_directory(f"{clip_path}/translate_video")
+            # asyncio.run(deliver_and_save_completion(videos, credential))
+            delete_contents_of_directory(f"{clip_path}/translate_video")
         if os.path.exists("cache/un_complete_video.toml"):
             os.remove("cache/un_complete_video.toml")
 
